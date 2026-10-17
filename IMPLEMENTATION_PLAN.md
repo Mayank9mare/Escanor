@@ -62,6 +62,7 @@ escanor/
   voice/                 COPIED from kmare_code/voice
     stt/ tts/ speech.py  STTEngine / TTSEngine + faster-whisper, Piper, Sarvam, mock
     chunker.py           sentence splitter for streaming TTS
+    audio_out.py         single speaker owner: priority queue, music auto-duck (Phase 4a)
     vad.py               Silero VAD wrapper (Phase 4b)
     audio_loop.py        native mic/speaker loop via sounddevice: wake word → listen → reply (Phase 4c)
     wakeword.py          openWakeWord ("hey escanor" custom model or "hey jarvis" stock)
@@ -112,30 +113,56 @@ Provider overrides:
 
 ### 2.2 Agent loop
 
+The core is **async** (kmare-code is fully sync; that can't support
+confirmations mid-turn, barge-in cancellation, or a DJ running while
+you talk). Providers keep their sync SDK calls but run in a worker
+thread, bridged to an async iterator; switch to native async clients
+later only if profiling says so.
+
 ```python
+class Confirmer(Protocol):              # one per interface: CLI y/n, WS round-trip, voice "yes"
+    async def confirm(self, call: ToolCall, summary: str) -> bool: ...
+
 class Agent:
     def __init__(self, model: Model, tools: ToolRegistry, prompts: PromptBuilder, gate: PermissionGate): ...
-    def run_turn(self, session: Session, user_text: str) -> Iterator[Event]:
+    async def run_turn(self, session: Session, user_text: str, confirmer: Confirmer) -> AsyncIterator[Event]:
         session.append_user(user_text)
         for step in range(MAX_STEPS):            # MAX_STEPS = 8
-            for ev in self.model.chat_stream_tools(prompts.build(session), tools.schemas()):
+            resp = None
+            async for ev in astream(self.model.chat_stream_tools, prompts.build(session), tools.schemas()):
                 if ev.kind == "text": yield TextDelta(ev.text)
-            resp = ev.response
+                else: resp = ev.response
             session.append_assistant(resp)
             if not resp.tool_calls: yield TurnDone(usage); return
             for call in resp.tool_calls:
                 yield ToolStarted(call)
-                result = gate.check_and_dispatch(call)   # may yield a ConfirmRequest event
+                result = await gate.dispatch(call, confirmer)   # awaits confirmer for `external`
                 session.append_tool_result(call, result)
                 yield ToolFinished(call, result)
         yield Error("too many tool steps")
 ```
 
+Cancellation (barge-in, "stop") = cancel the asyncio task consuming
+`run_turn`; the session records the partial reply as interrupted.
+
 Every interface (CLI, web UI, voice loop) is just a consumer of this
-event stream. Model switching = replace `agent.model` between turns;
-the session history is provider-neutral (kmare's `{role, content}` +
-tool-call shape), so a conversation can start on Haiku and continue on
-Sonnet.
+event stream. Model switching = replace `agent.model` between turns.
+History is provider-neutral, **but tool-call history is not fully
+portable**: Gemini rejects replayed tool calls without its
+`thought_signature`, and ids differ per provider. On a model switch,
+`session.py` collapses completed earlier turns' tool calls into plain
+text (`[web_search "x" → 3 results: …]`); only the current turn keeps
+native tool-call blocks.
+
+### 2.2a Tool groups (keep the tool list small)
+
+Sending ~30 tool schemas on every call costs tokens on every Haiku turn
+and makes small Ollama models pick tools badly. Tools are grouped:
+`core` (time, timers, switch_model, use_skill, brain_search,
+remember_fact, web_search) is always on; `music`, `assistant`,
+`brain_edit`, `research` are enabled by a `enable_tools(group)` meta-tool
+(same idea as skills), and stay on for the rest of the session. DJ mode
+enables `music` automatically. Target: ≤15 schemas per call.
 
 ### 2.3 Model aliases (config.toml)
 
@@ -161,6 +188,15 @@ sonnet" (→ `switch_model` tool) all go through `registry.resolve_alias`.
 | `write` | brain_write, remember_fact, music_queue, set_timer | run, announce in event stream |
 | `external` | calendar create, anything sending a message, mac shell actions | **ask for confirmation** (CLI y/n, UI button, voice "yes") |
 
+**Untrusted content.** Web pages, fetched papers, imported notes and
+YouTube metadata can contain text that tries to instruct the model.
+- Tool results from `web_*`, `research_*` and imported vaults are wrapped as
+  `<untrusted source="…">…</untrusted>`, and the system prompt says they are data.
+- Once a turn has read untrusted content, `write` tools that persist into
+  every future prompt (`remember_fact`, `forget_fact`) need confirmation
+  in that turn. Otherwise injected text could plant a permanent "fact".
+- `external` tools always confirm, whatever the source.
+
 ### 2.5 Skills
 
 `skills/loader.py` scans `ESCANOR_SKILL_DIRS` (default:
@@ -171,8 +207,13 @@ the tool result; `read_skill_file("learn-anything", "references/socratic.md")`
 lets it pull referenced files on demand. Skills written for Claude Code
 refer to paths like `~/.learn/<topic>.md`; the prompt tells Escanor to
 map those to `brain/research/learn/` via brain tools. Allow-list skills
-in config (start with `learn-anything`, `grill-me`, `kb`), since most
-of that repo is engineering/work tooling.
+in config (start with `learn-anything`, `grill-me`), since most of
+that repo is engineering/work tooling. **Don't load `kb`**: it writes
+to `~/.claude/knowledgebase/` and would split the second brain in two.
+Its category layout (people/projects/processes) is adopted by
+`brain/vault.py` instead. Skills name Claude Code tools (Read, Write,
+Grep); `prompts.py` carries an explicit map (Read → `brain_read` /
+`read_skill_file`, Write → `brain_write`, Grep → `brain_search`).
 
 ---
 
@@ -183,10 +224,18 @@ Each phase: tasks → done-when → tests. Commit at the end of each phase
 
 ### Phase 0 — Spikes (½ day, throwaway, in `spikes/`)
 Prove the three risky external pieces before building on them.
-- [ ] th-ch app: install, enable **API Server** plugin, find port + auth flow
-      (`auth.ts` exists — likely a token you approve in-app); curl `/api/v1/song`, `/search`, `POST /queue`, `/volume`.
+- [ ] th-ch app: install, enable **API Server** plugin. Known from source: port **26538**,
+      hostname defaults to **0.0.0.0** (reachable from your whole network) → change it to
+      `127.0.0.1` in the plugin settings. Auth strategy `AUTH_AT_FIRST`: `POST /auth/escanor`
+      pops an allow/deny dialog in the app once, returns `{accessToken}` (JWT, **no expiry**,
+      so store it in `~/.escanor/ytm_token` with 0600 perms). Confirm the header format
+      (likely `Authorization: Bearer`), then curl `/api/v1/song`, `/search`, `POST /queue`, `/volume`.
 - [ ] ytmusicapi: run browser auth, call `get_history()`, `get_liked_songs()`, `get_watch_playlist(videoId)` (radio-style recommendations).
 - [ ] Anthropic streaming with tools on Haiku: stream text + one tool call round-trip.
+- [ ] Echo test: play TTS out of the laptop speakers with music on, and measure whether
+      Silero VAD / openWakeWord fire on Escanor's own voice. Try (a) the browser's
+      `echoCancellation: true`, (b) the macOS voice-processing audio unit (AEC) through a tiny
+      Swift helper, (c) headphones. The result picks the Phase 4b/4c design.
 
 **Done when:** a short `spikes/FINDINGS.md` records ports, auth steps, and response shapes.
 
@@ -194,7 +243,9 @@ Prove the three risky external pieces before building on them.
 - [ ] `pyproject.toml` (uv), extras: `anthropic`, `openai`, `voice`, `music`, `server`, `dev`.
 - [ ] Copy `models/`, `tools/base.py`, `tools/registry.py`, `telemetry.py`, `config.py` from kmare-code; rename imports `kmare_code` → `escanor`; trim providers to anthropic/openai/gemini/ollama/mock (drop opencode/sarvam chat unless wanted; keep Sarvam STT/TTS).
 - [ ] Add `resolve_alias` + `config.toml` loading; default `haiku`.
-- [ ] `cli.py` REPL using `chat_stream` (text only for now), `/model`, `/new`, `/quit`.
+- [ ] Async skeleton: `core/agent.py` with zero tools + `astream` thread bridge, so the CLI is
+      built on the real event stream from day one and isn't rewritten in Phase 2.
+- [ ] `cli.py` REPL consuming `Agent.run_turn` events, `/model`, `/new`, `/quit`.
 - [ ] `.env.example`, `README.md` quickstart.
 
 **Done when:** `uv run escanor` chats with Haiku; `/model gemini` and `/model local` switch mid-conversation.
@@ -209,32 +260,44 @@ Prove the three risky external pieces before building on them.
 - [ ] CLI renders events (tool calls shown dimmed, confirmations as y/n).
 
 **Done when:** "what's the latest on <topic>?" triggers web_search → answer with sources; "teach me how transformers work" loads learn-anything and starts a Socratic session.
-**Tests:** agent loop with scripted mock model (0, 1, multi-step tool calls; MAX_STEPS); permission gate blocks `external` without confirm; OpenAI tool-call delta accumulation from recorded chunks; skill loader frontmatter parsing.
+**Tests:** agent loop with scripted mock model (0, 1, multi-step tool calls; MAX_STEPS); permission gate blocks `external` without confirm; OpenAI tool-call delta accumulation from recorded chunks; skill loader frontmatter parsing; switching Haiku → Gemini after a tool-using turn sends collapsed history (no foreign tool-call blocks); cancelling a turn mid-stream leaves a consistent session; tool groups keep schemas ≤15.
 
 ### Phase 3 — Second brain (2–3 days)
 - [ ] `brain/vault.py`: create layout, safe paths (no escaping the vault), frontmatter (`tags`, `created`, `updated`).
 - [ ] `brain/embeddings.py`: Ollama `nomic-embed-text` (port kmare's), mock embedder; if Ollama is down → keyword-only search.
-- [ ] `brain/index.py`: chunk by heading (~400 tokens, overlap 50), store in `index.db` with FTS5 + sqlite-vec; hybrid score (BM25 + cosine, reciprocal-rank fusion); incremental reindex on mtime/hash; `escanor brain reindex`.
+- [ ] `brain/index.py`: chunk by heading (~400 tokens, overlap 50), store in `index.db`: FTS5 for keywords,
+      embeddings as float32 blobs searched with a numpy brute-force cosine (milliseconds at personal-vault
+      scale, <50k chunks; avoids `sqlite-vec`'s loadable-extension requirement, which some macOS Python
+      builds disable). Move to sqlite-vec only if the vault outgrows it. Hybrid score (BM25 + cosine, reciprocal-rank fusion); incremental reindex on mtime/hash; `escanor brain reindex`.
 - [ ] `brain/tools.py`: search (returns path + heading + snippet), read, write, append (journal), `remember_fact`/`forget_fact` editing `facts.md`.
 - [ ] `prompts.py` injects `facts.md` (capped ~1.5k tokens) every turn; instructs "search the brain before answering personal questions; cite note paths".
 - [ ] Optional import: point at an existing Obsidian vault folder (read-only) via `BRAIN_EXTRA_DIRS`.
 
-**Done when:** "remember that I prefer window seats" → in facts.md; next session "book-wise, where do I like to sit?" answers from memory; "what did I write about project X?" cites notes.
-**Tests:** chunker on fixture notes; hybrid ranking on a small fixture vault; path-traversal rejection; incremental reindex only touches changed files.
+**Done when:** "remember that I prefer window seats" → in facts.md; next session "which seat do I like on flights?" answers from memory; "what did I write about project X?" cites notes.
+**Tests:** chunker on fixture notes; hybrid ranking on a small fixture vault; path-traversal rejection; incremental reindex only touches changed files; `remember_fact` after a `web_fetch` in the same turn requires confirmation.
 
 ### Phase 4 — Voice (3–4 days, three sub-steps)
 **4a. Port kmare-voice onto the agent**
 - [ ] Copy `voice/stt`, `voice/tts`, `speech.py`; `server/app.py` with WebSocket: client sends WAV (push-to-talk), server streams Events as JSON + audio chunks.
+- [ ] `voice/audio_out.py`: **one** audio output owner, a priority queue (confirmation prompts >
+      replies > timers > DJ patter), with no two utterances overlapping. It auto-ducks YouTube Music
+      (via the player volume API) whenever Escanor is listening or speaking, not only in DJ mode,
+      and always restores the volume in a `finally`. Speech plays **server-side** (sounddevice),
+      so timers and the DJ still talk with the browser tab closed; the browser only streams it when remote.
 - [ ] UI: chat transcript, tool-activity chips, model picker, mic button, confirm dialog.
 
 **4b. Streaming speech (biggest latency win)**
 - [ ] `voice/chunker.py`: split TextDeltas into sentences (handle abbreviations, numbers, code/markdown stripped); synthesize + send each sentence as soon as complete.
 - [ ] Spoken-style prompt variant when input came from voice (no markdown, no URLs read aloud, short answers + "want details?").
-- [ ] Barge-in: client-side VAD (Silero via onnxruntime-web) while playing → stop playback, send `cancel`; server aborts the in-flight stream.
+- [ ] Barge-in: VAD while speaking → stop playback, cancel the turn task. Uses the echo-cancellation approach
+      picked by the Phase 0 echo test; without AEC, barge-in is **headphones-only** and the speaker
+      path falls back to a push-to-talk hotkey while Escanor speaks (otherwise it interrupts itself).
 - [ ] Add Kokoro TTS engine as a higher-quality local option alongside Piper.
 
 **4c. Hands-free native loop (Jarvis mode)**
 - [ ] `voice/audio_loop.py` with `sounddevice`: openWakeWord → record until VAD silence → STT → agent → streamed TTS to speakers, barge-in via the same VAD.
+      The stock `hey_jarvis` model is known to false-trigger on partial phrases, so require a
+      confidence threshold plus a short confirmation chime, and expect to train a custom "hey escanor" model.
 - [ ] `escanor listen` command; menubar/launchd agent later.
 
 **Done when:** time from end of speech to first audio < ~1.5 s on Haiku + faster-whisper small + Piper; you can interrupt it mid-sentence.
@@ -244,7 +307,8 @@ Prove the three risky external pieces before building on them.
 - [ ] `music/player.py`: typed client for th-ch API Server (play, pause, next, previous, song, queue get/add/clear, search, volume get/set, like). Clear error when the app isn't running ("open YouTube Music desktop").
 - [ ] `music/library.py`: ytmusicapi (history, liked, search songs, `get_watch_playlist` for radio continuation); cache results 10 min.
 - [ ] `music/tools.py`: thin tools over both; `music_play("something upbeat for coding")` = model chooses query → search → queue → play.
-- [ ] `music/dj.py`: background task polling `/song` every 2 s. On track change (or ~15 s before end): pick next 1–3 tracks from history/likes/radio matching the session mood; generate a ≤25-word intro with a cheap model call (track, artist, one fact from metadata/web, optional time/weather); **duck** volume to ~25 %, speak via TTS, restore. Rate-limit patter (every 2–3 tracks, configurable).
+- [ ] `music/dj.py`: background asyncio task polling `/song` every 2 s. ~20 s before a track ends: pick the next 1–3 tracks from history/likes/radio matching the session mood and queue them; pre-generate a ≤25-word intro with a cheap model call (track, artist, one fact from metadata/web, optional time/weather) and **pre-synthesize** it. At the boundary, v1 = **pause → speak → play** (reliable, no talking over vocals); v2 = radio-style volume duck over the intro. Rate-limit patter (every 2–3 tracks, configurable). Patter goes through `audio_out` at the lowest priority; a conversation always wins.
+- [ ] Spend guard: count DJ model calls per hour and enforce a daily cap from config, since DJ mode runs unattended (the general cost dashboard stays in Phase 8).
 - [ ] Voice commands: "Escanor, DJ mode, chill evening vibe", "skip", "who is this?", "more like this", "stop the DJ".
 
 **Done when:** a 30-minute DJ session runs unattended with sensible picks and intros that don't talk over vocals at full volume.
@@ -279,11 +343,11 @@ Prove the three risky external pieces before building on them.
 
 | Phase | Effort | Depends on |
 |---|---|---|
-| 0 Spikes | ½ d | — |
-| 1 Scaffold + CLI | 1 d | — |
-| 2 Agent + tools + skills | 2 d | 1 |
+| 0 Spikes | 1 d | — |
+| 1 Scaffold + async CLI | 1–2 d | — |
+| 2 Agent + tools + skills | 2–3 d | 1 |
 | 3 Brain | 2–3 d | 2 |
-| 4 Voice | 3–4 d | 2 |
+| 4 Voice | 5–7 d (4c depends on the echo spike) | 2, 0 |
 | 5 DJ | 2–3 d | 2, 0 (4 for spoken patter) |
 | 6 Assistant | 2 d | 2 |
 | 7 Research | 1–2 d | 2, 3 |
