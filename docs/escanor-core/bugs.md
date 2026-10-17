@@ -11,16 +11,17 @@ Fixed bugs stay here (struck through) as an audit trail. IDs never get reused.
 | ~~B2~~ | ~~HIGH~~ | ~~Claude API errors crashed callers instead of becoming `RuntimeError`~~ | ✅ FIXED | step 1 · reading copied code | step 1 |
 | ~~B3~~ | ~~HIGH~~ | ~~Telemetry wrapper would silently turn off streaming~~ | ✅ FIXED | step 1 · design | step 1 |
 | ~~B4~~ | ~~HIGH~~ | ~~Claude thinking blocks dropped between tool calls~~ | ✅ FIXED | step 1 · reading copied code | step 1 |
-| B5 | LOW | OpenAI/Gemini streaming reports no token usage | 🔴 OPEN | step 1 | — |
+| ~~B5~~ | ~~LOW~~ | ~~OpenAI/Gemini streaming reports no token usage~~ | ✅ FIXED (OpenAI) | step 1 | Phase 8 |
 | B6 | LOW | A cancelled turn keeps its provider stream open until the next chunk | ⏸️ DEFERRED | step 2 | Phase 4 (see D2) |
 | ~~B7~~ | ~~LOW~~ | ~~CLI test could start a real REPL if a `.env` had a key~~ | ✅ FIXED | step 5 · test review | step 5 |
 | ~~B8~~ | ~~MEDIUM~~ | ~~A cancelled confirmation swallowed the next line you typed~~ | ✅ FIXED | review pass 1 (Phase 2) | step 9 |
-| B9 | LOW | Telemetry stores the whole conversation on every call | ⏸️ DEFERRED | review pass 1 | Phase 8 |
+| ~~B9~~ | ~~LOW~~ | ~~Telemetry stores the whole conversation on every call~~ | ✅ FIXED | review pass 1 | Phase 8 |
 | B10 | LOW | Collapsing history on a model switch resets message timestamps | 🔴 OPEN | review pass 1 | — |
 | ~~B11~~ | ~~MEDIUM~~ | ~~Speech chunker split sentences inside code blocks~~ | ✅ FIXED | Phase 4 · test | Phase 4 |
 | ~~B12~~ | ~~HIGH~~ | ~~`escanor serve` rejected every WebSocket connection~~ | ✅ FIXED | Phase 4 · test | Phase 4 |
 | ~~B13~~ | ~~HIGH~~ | ~~No WebSocket support in plain uvicorn~~ | ✅ FIXED | Phase 4 · live browser check | Phase 4 |
 | ~~B14~~ | ~~LOW~~ | ~~arXiv papers saved under their licence notice instead of their title~~ | ✅ FIXED | Phase 7 · live ingest | Phase 7 |
+| ~~B15~~ | ~~MEDIUM~~ | ~~`listen` heard its own chime as speech and ended the turn early~~ | ✅ FIXED | final review pass | Phase 8 |
 
 Severity: **HIGH** = data loss, wrong result, security, blocks testing/release · **MEDIUM** =
 breaks an edge case or error path · **LOW** = minor or cosmetic.
@@ -28,17 +29,6 @@ breaks an edge case or error path · **LOW** = minor or cosmetic.
 ---
 
 ## 🔴 Open
-
-### B5. OpenAI/Gemini streaming reports no token usage
-
-- **Severity:** LOW · **Found:** 2026-10-17, step 1, by design review
-- **Where:** [openai_provider.py `chat_stream_tools`](../../escanor/models/openai_provider.py)
-- **Symptom:** telemetry shows `input_tokens`/`output_tokens` as empty for streamed GPT/Gemini turns.
-- **Root cause:** usage is only sent in streams when `stream_options={"include_usage": true}` is
-  requested; not every OpenAI-compatible endpoint accepts that option.
-- **Proposed fix:** send `stream_options` for `openai` only (and Gemini once verified live), and read
-  usage from the final usage-only chunk.
-- **Flow impact:** none on behaviour; cost tracking (Phase 5 spend cap) needs it.
 
 ### B10. Collapsing history on a model switch resets message timestamps
 
@@ -137,6 +127,29 @@ breaks an edge case or error path · **LOW** = minor or cosmetic.
 - **Fix:** take the title from arXiv's metadata API ([ingest.py `arxiv_title`](../../escanor/research/ingest.py)); verified live → "Attention Is All You Need".
 - **Regression test:** [test_should_fetch_arxiv_pdf_and_title_from_metadata](../../tests/test_research.py)
 
+### ~~B5. OpenAI/Gemini streaming reports no token usage~~
+
+- **Severity:** LOW · **Found:** step 1 · **Fixed:** Phase 8 (OpenAI only)
+- **Fix:** `stream_options={"include_usage": true}` on OpenAI's own endpoint and read the final usage chunk
+  ([openai_provider.py](../../escanor/models/openai_provider.py)). Gemini's compatible endpoint is left
+  without it until verified, so Gemini streams still show no tokens (and count $0 toward the cap).
+- **Regression test:** [test_openai_stream_reports_usage_when_official_endpoint](../../tests/test_polish.py)
+
+### ~~B9. Telemetry stores the whole conversation on every call~~
+
+- **Severity:** LOW · **Found:** review pass 1 · **Fixed:** Phase 8
+- **Fix:** telemetry keeps the message count and the newest message (≤2000 chars) only
+  ([instrumented.py `_request_summary`](../../escanor/models/instrumented.py)).
+- **Regression test:** [test_telemetry_keeps_only_newest_message](../../tests/test_polish.py)
+
+### ~~B15. `listen` heard its own chime as speech and ended the turn early~~
+
+- **Severity:** MEDIUM · **Found:** final review pass · **Fixed:** Phase 8
+- **Root cause:** the wake chime plays right before recording; the mic picks it up as the first "speech",
+  then 0.8 s of silence before you start talking ends the utterance → "Didn't catch anything".
+- **Fix:** wait for the chime, drain the mic, then record ([listen.py `ListenLoop.once`](../../escanor/voice/listen.py)).
+- **Regression test:** [test_listen_loop_drops_chime_audio_before_recording](../../tests/test_voice.py)
+
 ---
 
 ## ⏸️ Deferred / 🚫 Won't fix
@@ -146,8 +159,3 @@ breaks an edge case or error path · **LOW** = minor or cosmetic.
 - **Why not now:** harmless in the CLI (the reply is discarded); matters for barge-in latency in
   Phase 4. Trade-off recorded in [D2](decision.md#d2-async-agent-loop-blocking-providers-and-tools-run-on-worker-threads).
 
-### B9. Telemetry stores the whole conversation on every call
-
-- **Why not now:** copied behaviour from kmare-code; `telemetry.db` grows roughly with
-  (turns × conversation length). Harmless at personal scale for months. Phase 8 (cost dashboard)
-  should store a hash or the last message only.

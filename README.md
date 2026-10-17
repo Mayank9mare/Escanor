@@ -4,7 +4,7 @@ A local, Jarvis-style personal assistant: second brain, research tutor, AI DJ on
 and voice. See [PLAN.md](PLAN.md) for what it will be and
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how it's being built.
 
-**Status:** Phases 1–4 done: chat with switchable models (Haiku, Sonnet, GPT, Gemini, Ollama), web search
+**Status:** all eight plan phases built (live checks listed in the review guide): chat with switchable models (Haiku, Sonnet, GPT, Gemini, Ollama), web search
 and reading, skills, a second brain of Markdown notes, voice (web push-to-talk and hands-free), an AI DJ
 on YouTube Music, and Apple Reminders/Calendar, timers and a morning briefing (`escanor brief`).
 
@@ -52,6 +52,18 @@ kmare-voice are reused.
 | `/quit` | exit (Ctrl-D works too) |
 
 Ctrl-C stops a reply mid-way. `escanor --continue` resumes the last conversation.
+
+## Housekeeping
+
+| Command | What it does |
+|---|---|
+| `escanor brief` | morning briefing, then chat |
+| `escanor usage [--days 7]` | model calls, tokens and cost; daily cap in `[budget]` |
+| `escanor eval --model haiku` | does each capability pick the right tool? (stubbed tools, real model calls) |
+| `escanor brain reindex / backup` | rebuild search index / commit notes to git |
+| `escanor service install` | start the web UI at login (launchd) |
+
+Say "think hard" to hand a turn to Sonnet; long tool chains escalate automatically.
 
 ## Configuration
 

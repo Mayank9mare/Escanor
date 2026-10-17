@@ -243,6 +243,42 @@ class Repl:
             await self.run_turn_interruptible(line)
 
 
+def eval_command(app: Escanor) -> int:
+    import tempfile
+    from .core.session import SessionStore
+    from .ops import run_eval
+    print(f"Evaluating tool choice on {app.agent.model_spec} (stubbed tools; real model calls)…")
+    with tempfile.TemporaryDirectory() as scratch:
+        results = asyncio.run(run_eval(app.agent, SessionStore(Path(scratch) / "eval.db")))
+    for case, called, passed in results:
+        expected = " or ".join(case.expect) or "no tool"
+        print(f"{'PASS' if passed else 'FAIL'}  {case.prompt[:50]:<50}  expected {expected}; called {', '.join(called) or 'nothing'}")
+    score = sum(p for _, _, p in results)
+    print(f"{score}/{len(results)} passed")
+    return 0 if score == len(results) else 1
+
+
+def usage_command(settings: dict, days: int) -> int:
+    from datetime import datetime, timedelta
+    from . import telemetry
+    from .core.costs import cost, start_of_local_day_utc
+    since = start_of_local_day_utc(datetime.now() - timedelta(days=max(1, days) - 1))
+    total, rows = cost(telemetry.get_store().usage_since(since), settings["budget"].get("prices", {}))
+    label = "today" if days <= 1 else f"last {days} days"
+    if not rows:
+        print(f"No model calls {label}.")
+        return 0
+    print(f"{'provider/model':<40} {'calls':>6} {'in tok':>10} {'out tok':>9} {'avg s':>6} {'US$':>8}")
+    for r in rows:
+        usd = f"{r['usd']:.4f}" if r["usd"] is not None else "?"
+        print(f"{r['provider'] + '/' + r['model']:<40} {r['calls']:>6} {r['input_tokens']:>10,} "
+              f"{r['output_tokens']:>9,} {r['avg_duration_ms'] / 1000:>6.1f} {usd:>8}")
+    cap = float(settings["budget"].get("daily_usd", 0))
+    print(f"Total {label}: ${total:.4f}" + (f" (daily cap ${cap:.2f})" if cap > 0 else "")
+          + ("  · '?' = no price set ([budget.prices])" if any(r["usd"] is None for r in rows) else ""))
+    return 0
+
+
 def music_command(app: Escanor, action: str) -> int:
     from .music.player import PlayerNotAuthorized, PlayerUnavailable
     player, library = app.services.get("player"), app.services.get("library")
@@ -294,8 +330,13 @@ def main(argv: list[str] | None = None) -> int:
     listen_cmd = sub.add_parser("listen", help="hands-free: wake word, then talk")
     listen_cmd.add_argument("--enter", action="store_true", help="press Enter instead of saying the wake word")
     brain_cmd = sub.add_parser("brain", help="second brain maintenance")
-    brain_cmd.add_argument("action", choices=["reindex", "stats"])
+    brain_cmd.add_argument("action", choices=["reindex", "stats", "backup"])
+    service_cmd = sub.add_parser("service", help="start `escanor serve` at login (launchd)")
+    service_cmd.add_argument("action", choices=["install", "uninstall", "status"])
+    sub.add_parser("eval", help="check each capability picks the right tool (real model calls)")
     sub.add_parser("brief", help="your morning briefing, then the chat")
+    usage_cmd = sub.add_parser("usage", help="model calls, tokens and cost")
+    usage_cmd.add_argument("--days", type=int, default=1, help="how many days back (default: today)")
     music_cmd = sub.add_parser("music", help="connect YouTube Music")
     music_cmd.add_argument("action", choices=["connect", "status"])
     args = parser.parse_args(argv)
@@ -313,6 +354,18 @@ def main(argv: list[str] | None = None) -> int:
     store = default_store()
     app = build_app(settings, model, spec)
 
+    if args.command == "service":
+        from .ops import service
+        return service(args.action)
+
+    if args.command == "eval":
+        return eval_command(app)
+
+    if args.command == "brain" and args.action == "backup":
+        from .ops import backup_brain
+        print(backup_brain(app.vault.root))
+        return 0
+
     if args.command == "brain":
         counts = app.index.sync() if args.action == "reindex" else {"changed": 0, "removed": 0}
         stats = app.index.stats()
@@ -322,6 +375,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "music":
         return music_command(app, args.action)
+
+    if args.command == "usage":
+        return usage_command(settings, args.days)
 
     if args.command in ("serve", "listen"):
         from .voice import runtime

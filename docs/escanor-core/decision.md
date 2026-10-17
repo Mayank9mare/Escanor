@@ -11,7 +11,7 @@ what we're trading away. Newest at the bottom. Reversed decisions are marked **S
 | D1 | Copy kmare-code's models/tools/telemetry instead of depending on it | Accepted (you) | 2026-10-17 |
 | D2 | Async agent loop; blocking providers/tools run on worker threads | Accepted | 2026-10-17 |
 | D3 | Replay Claude's exact reply blocks (incl. thinking) for same-model turns | Accepted | 2026-10-17 |
-| D4 | Collapse other models' tool turns to text on a model switch | Accepted | 2026-10-17 |
+| D4 | Collapse other models' tool turns to text on a model switch | Refined by D38 | 2026-10-17 |
 | D5 | Build streaming-with-tools in Phase 1, not Phase 2 | Accepted | 2026-10-17 |
 | D6 | No `eager_input_streaming` on Claude tools | Accepted | 2026-10-17 |
 | D7 | Default Claude effort `low` | **Proposed** (your call) | 2026-10-17 |
@@ -45,6 +45,10 @@ what we're trading away. Newest at the bottom. Reversed decisions are marked **S
 | D35 | Ingested sources stay untrusted inside the brain | Accepted | 2026-10-17 |
 | D36 | Local files only from allowed folders | Accepted | 2026-10-17 |
 | D37 | Explaining is learn-anything's job; Escanor supplies ingest, paging, reviews | Accepted | 2026-10-17 |
+| D38 | Collapse tool history only when the provider changes | Accepted | 2026-10-17 |
+| D39 | Escalate to Sonnet on "think hard" or after 4 tool steps, then hand back | Accepted | 2026-10-17 |
+| D40 | Daily spend cap from telemetry, priced conservatively | Accepted | 2026-10-17 |
+| D41 | Evals grade tool choice with stubbed tools | Accepted | 2026-10-17 |
 
 ---
 
@@ -139,7 +143,7 @@ Another provider needs verbatim replay → generalise `raw` beyond Anthropic.
 
 ## D4. Collapse other models' tool turns to text on a model switch
 
-**Status:** Accepted · **Date:** 2026-10-17 · **Step:** 2
+**Status:** Refined by [D38](#d38-collapse-tool-history-only-when-the-provider-changes) · **Date:** 2026-10-17 · **Step:** 2
 
 ### Context
 You want to switch between Haiku, Sonnet, GPT, Gemini and Ollama mid-conversation. Tool-call
@@ -799,3 +803,64 @@ just downloaded").
 
 ### Decision
 A. arXiv titles come from arXiv's metadata API (the PDF's first line is often a licence notice, B14).
+
+---
+
+## D38. Collapse tool history only when the provider changes
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 8 · Refines D4
+
+### Context
+With escalation (D39), Haiku and Sonnet alternate within one conversation. D4 collapsed every other
+*model's* tool turns into text, so each "think hard" would have rewritten history for no reason: Claude
+reads another Claude model's tool turns natively (it just ignores the other model's thinking).
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. Compare providers, not models** | No rewrites within Claude; Gemini/OpenAI/Ollama switches still collapse | Two OpenAI-compatible providers (gpt vs gemini) still collapse, correctly |
+| B. Keep D4 as is | Simplest | History churn on every escalation |
+
+### Decision
+A ([session.py `collapse_tool_history`](../../escanor/core/session.py)).
+
+---
+
+## D39. Escalate to Sonnet on "think hard" or after 4 tool steps, then hand back
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 8
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. Phrase trigger for the whole turn; step trigger mid-turn (same provider only); back to Haiku after** | Cheap by default, strong when it matters; you see `ModelSwitched` | Phrase list is heuristic |
+| B. A classifier call per turn to decide | Smarter routing | An extra call on every turn |
+| C. No escalation | Simplest | Haiku fumbles long tool chains |
+
+### Decision
+A ([router.py](../../escanor/core/router.py)); `[router] escalate_to = ""` turns it off.
+
+---
+
+## D40. Daily spend cap from telemetry, priced conservatively
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 8
+
+The agent checks today's spend (telemetry tokens × list prices) before every model call and stops with
+a clear message at `[budget] daily_usd` (default $3). Cache reads are priced as full input, so it
+over-estimates, which is the safe direction. Unpriced models count as $0 unless you add
+`[budget.prices]`. Alternative: provider-side limits in each console. Those are coarser, and they don't
+cover the unattended DJ per day.
+
+---
+
+## D41. Evals grade tool choice with stubbed tools
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 8
+
+`escanor eval` runs ten prompts (one per capability) against any model and passes a case when the
+expected tool is called. Every tool call gets a stub answer, so evals can't write notes, create
+reminders or play music, and grading needs no judge model. Answer quality isn't graded; that needs
+a judge or human review, deferred.

@@ -31,6 +31,9 @@ class OpenAIModel(Model):
         self._openai = openai
         self._client = openai.OpenAI(api_key=api_key, base_url=base_url, default_headers=extra_headers)
         self.name = model_name
+        # Token usage in streams needs stream_options, which only OpenAI's own
+        # endpoint is known to accept; compatible endpoints may reject it (B5).
+        self._stream_usage = base_url is None
 
     def chat(self, messages: list[dict], tools: list[dict] | None = None) -> ModelResponse:
         openai_messages = self._to_openai_messages(messages)
@@ -94,12 +97,17 @@ class OpenAIModel(Model):
         request: dict = {"model": self.name, "messages": self._to_openai_messages(messages), "stream": True}
         if tools:
             request["tools"] = self._to_openai_tools(tools)
+        if self._stream_usage:
+            request["stream_options"] = {"include_usage": True}
+        usage = None
 
         text_parts: list[str] = []
         calls: dict[int, dict] = {}
         finish_reason = None
         try:
             for chunk in self._client.chat.completions.create(**request):
+                if getattr(chunk, "usage", None):
+                    usage = chunk.usage
                 if not chunk.choices:
                     continue
                 choice = chunk.choices[0]
@@ -136,6 +144,7 @@ class OpenAIModel(Model):
         response = ModelResponse(
             text="".join(text_parts), tool_calls=tool_calls,
             stop_reason="tool_use" if tool_calls else (finish_reason or "end_turn"),
+            input_tokens=getattr(usage, "prompt_tokens", None), output_tokens=getattr(usage, "completion_tokens", None),
         )
         yield StreamEvent("done", response=response)
 

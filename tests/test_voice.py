@@ -239,6 +239,7 @@ async def test_listen_loop_wakes_hears_and_responds():
         audio.say("Done.")
 
     loop = ListenLoop(_aiter(frames), EnergyVAD(), _Wake(), lambda wav: "turn on focus mode", respond, audio)
+    loop.chime_seconds = 0
     assert await loop.once() == "turn on focus mode"
     assert heard == ["turn on focus mode"] and player.played == [b"Done."]
     await audio.close()
@@ -262,6 +263,50 @@ async def test_listen_loop_barge_in_cancels_turn_when_enabled():
 
     loop = ListenLoop(_aiter(frames), EnergyVAD(), None, lambda wav: "tell me a story", respond, audio,
                       barge_in=True, wait_enter=wait_enter)
+    loop.chime_seconds = 0
     await asyncio.wait_for(loop.once(), 5)
     assert cancelled.is_set() and not audio.speaking
+    await audio.close()
+
+
+class _DrainableFrames:
+    """Frames where drain() drops everything queued so far (like MicFrames)."""
+
+    def __init__(self, queued, later):
+        self.queued, self.later = list(queued), list(later)
+        self.drained = 0
+
+    def drain(self):
+        self.drained += len(self.queued)
+        self.queued = []
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self.queued:
+            return self.queued.pop(0)
+        if self.later:
+            return self.later.pop(0)
+        raise StopAsyncIteration
+
+
+async def test_listen_loop_drops_chime_audio_before_recording():
+    """B15: the chime must not count as the start of an utterance."""
+    chime_frames = _frames("ss")                       # the mic hearing the chime
+    speech = _frames("...." + "s" * 8 + "." * 12)      # then you start talking
+    frames = _DrainableFrames(chime_frames, speech)
+    heard = []
+
+    async def wait_enter():
+        return None
+
+    async def respond(text):
+        heard.append(text)
+
+    audio = AudioOut(_tts, NullPlayer())
+    loop = ListenLoop(frames, EnergyVAD(), None, lambda wav: f"{len(wav)} bytes", respond, audio, wait_enter=wait_enter)
+    loop.chime_seconds = 0
+    assert await loop.once() != ""
+    assert frames.drained >= 2 and heard
     await audio.close()

@@ -158,14 +158,14 @@ class Session:
             self.append_tool_result(call, ToolResult(ok=False, output=CANCELLED_RESULT))
 
     def collapse_tool_history(self, new_model_spec: str) -> bool:
-        """Invariant 2, on a model switch. Assistant turns produced by a
-        different model than `new_model_spec` that used tools are
-        rewritten as plain text, and their tool results folded into that
-        text -- e.g. Gemini rejects replayed tool calls lacking its own
-        thought_signature, and ids/formats differ per provider. Turns
-        from new_model_spec itself are left untouched, so switching back
-        to a model replays its own turns verbatim. Returns True if
-        anything changed (and was persisted)."""
+        """Invariant 2, on a provider switch. Assistant turns that used
+        tools and came from a different *provider* than `new_model_spec`
+        are rewritten as plain text, with their tool results folded in --
+        e.g. Gemini rejects replayed tool calls lacking its own
+        thought_signature, and ids/formats differ per provider. Turns from
+        the same provider are left alone (Haiku -> Sonnet reads Claude tool
+        turns fine), so escalating within Claude rewrites nothing (D38).
+        Returns True if anything changed (and was persisted)."""
         results: dict[str, dict] = {m["tool_call_id"]: m for m in self.messages if m["role"] == "tool"}
         collapsed: list[dict] = []
         dropped_ids: set[str] = set()
@@ -175,7 +175,7 @@ class Session:
                 continue
             if (
                 message["role"] == "assistant" and message.get("tool_calls")
-                and message.get("model") != new_model_spec
+                and _provider(message.get("model")) != _provider(new_model_spec)
             ):
                 lines = [message["content"]] if message.get("content") else []
                 for call in message["tool_calls"]:
@@ -192,6 +192,10 @@ class Session:
             self.messages = _merge_adjacent_assistants(collapsed)
             self._store._replace_all(self.id, self.messages)
         return changed
+
+
+def _provider(spec: str | None) -> str:
+    return (spec or "").split(":", 1)[0]
 
 
 def _summarise(text: str, limit: int = 300) -> str:

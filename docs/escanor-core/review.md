@@ -1,7 +1,7 @@
 # Escanor core — Review Guide
 
-**Branch:** `main` · **Scope:** Phases 1–7 (core, tools, web, skills, brain, voice, DJ, assistant, research) ·
-**Tests:** 215 passing · **Updated:** 2026-10-17
+**Branch:** `main` · **Scope:** Phases 1–8, the whole implementation plan ·
+**Tests:** 232 passing · **Updated:** 2026-10-17
 
 ## TL;DR (read this first)
 
@@ -54,8 +54,10 @@ Read in this order: it follows a message from the model interface up to the term
 | 31 | [assistant/timers.py](../../escanor/assistant/timers.py), [briefing.py](../../escanor/assistant/briefing.py) | Timers, morning briefing | a failing announcer/source doesn't stop the others | 220 |
 | 32 | [research/ingest.py](../../escanor/research/ingest.py) | Papers and articles into the brain | local-file allowlist; arXiv title | 170 |
 | 33 | [research/reviews.py](../../escanor/research/reviews.py), [research/tools.py](../../escanor/research/tools.py) | Reviews due; research tools | sources fenced everywhere ([D35](decision.md#d35-ingested-sources-stay-untrusted-inside-the-brain)) | 200 |
-| 34 | [cli.py](../../escanor/cli.py) | Terminal chat | `StdinLines` ([B8](bugs.md)); Ctrl-C cancels only the turn | 270 |
-| 35 | [tests/](../../tests/) | 215 offline tests | error paths, not just happy paths | — |
+| 34 | [core/router.py](../../escanor/core/router.py), [core/costs.py](../../escanor/core/costs.py) | Escalation, spend cap | hand-back in `finally`; cap checked before each call | 160 |
+| 35 | [ops.py](../../escanor/ops.py) | service, backup, eval | eval never runs real tools ([D41](decision.md#d41-evals-grade-tool-choice-with-stubbed-tools)) | 170 |
+| 36 | [cli.py](../../escanor/cli.py) | Terminal chat | `StdinLines` ([B8](bugs.md)); Ctrl-C cancels only the turn | 270 |
+| 37 | [tests/](../../tests/) | 232 offline tests | error paths, not just happy paths | — |
 
 Skip or skim: [telemetry.py](../../escanor/telemetry.py) (copied, path renamed),
 [assistant/web_search.py](../../escanor/assistant/web_search.py) (copied DuckDuckGo scraper).
@@ -147,10 +149,19 @@ dates are built from numbers so your region settings can't scramble them.
 
 | ID | Severity | One line | Blocks merge? |
 |---|---|---|---|
-| B5 | LOW | No token usage from OpenAI/Gemini streams | No |
-| B6 | LOW | Cancelled turn holds its stream until the next chunk | No (Phase 4) |
-| B9 | LOW | Telemetry stores whole conversations per call | No (Phase 8) |
+| B6 | LOW | Cancelled turn holds its stream until the next chunk | No (deferred) |
 | B10 | LOW | Model-switch collapse resets message timestamps | No |
+| — | — | Not yet run live: Claude (no key), YouTube Music app, Apple permissions, mic/wake word | Needs you |
+
+## Not verified yet (needs you)
+
+| What | How |
+|---|---|
+| Claude live (thinking replay, tool loop, caching) | add `ANTHROPIC_API_KEY`, run `escanor`, then `escanor eval` |
+| YouTube Music app control + DJ | install th-ch app, `escanor music connect`, "DJ mode, chill evening" |
+| Reminders/Calendar | "what's on today?" (approve the macOS Automation prompt) |
+| Mic, wake word, barge-in | `uv pip install -e ".[listen]"`, `escanor listen` (headphones for barge-in) |
+| Echo test (Phase 0) | speakers + music on, see if `listen` hears itself |
 
 ## How to verify locally
 

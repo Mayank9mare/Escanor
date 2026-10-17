@@ -65,6 +65,13 @@ def test_should_collapse_other_models_tool_turns_when_switching(store):
     assert store.load(session.id).messages == session.messages  # persisted
 
 
+def test_should_leave_same_provider_turns_untouched_when_escalating(store):
+    session = store.create()
+    session.append_user("weather?")
+    _tool_turn(session, model_spec=HAIKU)
+    assert session.collapse_tool_history("anthropic:claude-sonnet-5-5") is False
+
+
 def test_should_leave_own_turns_untouched_when_switching_back(store):
     session = store.create()
     session.append_user("weather?")

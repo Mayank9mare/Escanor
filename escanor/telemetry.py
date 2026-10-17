@@ -168,6 +168,19 @@ class TelemetryStore:
         """).fetchall()
         return [dict(r) for r in rows]
 
+    def usage_since(self, started_at_iso: str) -> list[dict]:
+        """Calls and tokens per provider/model since a UTC ISO timestamp --
+        what the spend cap and `escanor usage` read."""
+        rows = self._conn.execute("""
+            SELECT provider, model, COUNT(*) AS calls,
+                   SUM(COALESCE(input_tokens, 0)) AS input_tokens,
+                   SUM(COALESCE(output_tokens, 0)) AS output_tokens,
+                   AVG(duration_ms) AS avg_duration_ms
+            FROM calls WHERE started_at >= ? AND status = 'ok'
+            GROUP BY provider, model ORDER BY calls DESC
+        """, (started_at_iso,)).fetchall()
+        return [dict(r) for r in rows]
+
     def recent_traces(self, limit: int = 50) -> list[dict]:
         """One row per trace: its component, when it started, how many
         spans it made, total duration, and whether anything in it

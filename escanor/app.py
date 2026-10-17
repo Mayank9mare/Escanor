@@ -17,6 +17,8 @@ from .brain.index import BrainIndex
 from .brain.tools import BRAIN_GUIDANCE, brain_tools
 from .brain.vault import Vault
 from .core.agent import Agent
+from .core.costs import DailyBudget
+from .core.router import Router
 from .core.prompts import PromptBuilder
 from .models.base import Model
 from .models.registry import get_model
@@ -82,6 +84,14 @@ def build_app(settings: dict, model: Model, model_spec: str) -> Escanor:
     ])
     agent = Agent(model, model_spec, tools=registry, prompts=prompts, gate=PermissionGate(),
                   max_steps=settings["agent"]["max_steps"])
+    if settings["router"].get("escalate_to"):
+        agent.router = Router(lambda name: build_model(name, settings), settings["router"]["escalate_to"],
+                              int(settings["router"].get("after_steps", 0)))
+    if float(settings["budget"].get("daily_usd", 0)) > 0:
+        from . import telemetry
+        agent.budget = DailyBudget(float(settings["budget"]["daily_usd"]),
+                                   lambda since: telemetry.get_store().usage_since(since),
+                                   settings["budget"].get("prices", {}))
 
     def request_switch(name: str) -> str:
         new_model, spec = build_model(name, settings)

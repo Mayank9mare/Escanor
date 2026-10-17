@@ -206,6 +206,7 @@ class ListenLoop:
         self._wait_enter = wait_enter
         self._status = on_status or (lambda s: None)
         self._settings = settings
+        self.chime_seconds = 0.35
 
     async def wait_for_wake(self) -> None:
         if self._wake is None:
@@ -236,6 +237,13 @@ class ListenLoop:
         """One wake → hear → respond cycle. Returns what was heard."""
         await self.wait_for_wake()
         chime()
+        # Let the chime finish and drop what the mic heard of it: otherwise it
+        # counts as the start of speech, and 0.8 s of silence before you
+        # begin ends the "utterance" (B15).
+        await asyncio.sleep(self.chime_seconds)
+        drain = getattr(self._frames, "drain", None)
+        if drain:
+            drain()
         text = await self.hear()
         if not text:
             self._status("Didn't catch anything.")

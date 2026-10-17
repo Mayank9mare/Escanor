@@ -16,6 +16,15 @@ from .base import Model, ModelResponse, StreamEvent
 from .. import telemetry
 
 
+def _request_summary(messages: list[dict]) -> dict:
+    """What telemetry keeps of a request: its size and the newest message.
+    Storing the whole conversation on every call made telemetry.db grow
+    with (turns x conversation length) and copied private notes into a
+    second database (B9)."""
+    last = messages[-1] if messages else {}
+    return {"messages": len(messages), "last_role": last.get("role"), "last": str(last.get("content", ""))[:2000]}
+
+
 class InstrumentedModel(Model):
     def __init__(self, inner: Model, provider: str, role: str):
         self._inner = inner
@@ -35,7 +44,7 @@ class InstrumentedModel(Model):
             trace_id=self._trace_id, component=self._component, role=self._role,
             provider=self._provider, model=self.name,
         ) as result:
-            result["request"] = messages
+            result["request"] = _request_summary(messages)
             response = self._inner.chat(messages, tools)
             result["input_tokens"] = response.input_tokens
             result["output_tokens"] = response.output_tokens
@@ -54,7 +63,7 @@ class InstrumentedModel(Model):
             trace_id=self._trace_id, component=self._component, role=self._role,
             provider=self._provider, model=self.name, streamed=True,
         ) as result:
-            result["request"] = messages
+            result["request"] = _request_summary(messages)
             chunks: list[str] = []
             for chunk in self._inner.chat_stream(messages):
                 chunks.append(chunk)
@@ -69,7 +78,7 @@ class InstrumentedModel(Model):
             trace_id=self._trace_id, component=self._component, role=self._role,
             provider=self._provider, model=self.name, streamed=True,
         ) as result:
-            result["request"] = messages
+            result["request"] = _request_summary(messages)
             for event in self._inner.chat_stream_tools(messages, tools):
                 if event.kind == "done" and event.response is not None:
                     response = event.response

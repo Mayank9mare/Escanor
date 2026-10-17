@@ -24,7 +24,9 @@ from ..models.base import Model, ModelResponse, ToolCall
 from ..tools.base import ToolResult
 from ..tools.registry import ToolRegistry
 from .events import Error, Event, ModelSwitched, TextDelta, ToolFinished, ToolStarted, TurnDone
+from .costs import DailyBudget
 from .prompts import PromptBuilder
+from .router import Router, same_provider
 from .session import Session
 
 T = TypeVar("T")
@@ -111,6 +113,8 @@ class Agent:
         self.gate: Gate = gate or AllowAllGate()
         self.max_steps = max_steps
         self._pending_switch: tuple[Model, str] | None = None
+        self.router: Router | None = None        # escalation to a stronger model (core/router.py)
+        self.budget: DailyBudget | None = None   # daily spend cap (core/costs.py)
 
     def set_model(self, model: Model, model_spec: str) -> None:
         """Switch models between turns. The session's history is fixed up
@@ -136,27 +140,53 @@ class Agent:
 
     async def run_turn(self, session: Session, user_text: str, confirmer: Confirmer | None = None,
                        spoken: bool = False) -> AsyncIterator[Event]:
-        """One turn. spoken=True asks for a reply suited to being read aloud."""
+        """One turn. spoken=True asks for a reply suited to being read aloud.
+        An escalated turn (router) runs on the stronger model and hands back
+        to the normal one afterwards."""
+        home = (self.model, self.model_spec)
         try:
             async for event in self._steps(session, user_text, confirmer or DenyConfirmer(), spoken):
                 yield event
         finally:
+            escalated = self.model_spec != home[1]
+            if escalated:
+                self.set_model(*home)
             switched_to = self._apply_pending_switch()
+        if escalated and not switched_to:
+            yield ModelSwitched(home[1])
         if switched_to:
             yield ModelSwitched(switched_to)
 
+    def _escalate(self) -> str | None:
+        target = self.router.escalation() if self.router else None
+        if target is None or target[1] == self.model_spec:
+            return None
+        self.set_model(*target)
+        return target[1]
+
     async def _steps(self, session: Session, user_text: str, confirmer: Confirmer, spoken: bool) -> AsyncIterator[Event]:
+        if self.router and self.router.wants_escalation(user_text) and (spec := self._escalate()):
+            yield ModelSwitched(spec)
         session.repair()
         session.collapse_tool_history(self.model_spec)
         session.append_user(user_text)
         usage = {"input_tokens": 0, "output_tokens": 0}
 
-        for _ in range(self.max_steps):
+        for step in range(self.max_steps):
+            if (self.router and self.router.after_steps and step == self.router.after_steps):
+                target = self.router.escalation()
+                if target and target[1] != self.model_spec and same_provider(target[1], self.model_spec):
+                    self.set_model(*target)
+                    yield ModelSwitched(target[1])
+            if self.budget is not None and (stop := self.budget.check()):
+                yield Error(stop)
+                return
             messages = self.prompts.build(session, spoken)
             schemas = self.tool_schemas() or None
+            model = self.model
             response: ModelResponse | None = None
             try:
-                async for event in astream(lambda: self.model.chat_stream_tools(messages, schemas)):
+                async for event in astream(lambda: model.chat_stream_tools(messages, schemas)):
                     if event.kind == "text" and event.text:
                         yield TextDelta(event.text)
                     elif event.kind == "done":
@@ -190,4 +220,3 @@ class Agent:
                 yield ToolFinished(call, result)
 
         yield Error(f"Stopped after {self.max_steps} tool steps without a final answer.")
-

@@ -1,7 +1,7 @@
 # Escanor core — Flow
 
 How the core works at runtime: where execution starts, every function on the path, every way a
-turn can end, and the low-level design underneath. Last synced: 2026-10-17, Phase 7 complete.
+turn can end, and the low-level design underneath. Last synced: 2026-10-17, Phase 8 complete (final pass).
 
 ## 1. In one paragraph
 
@@ -50,7 +50,8 @@ flowchart LR
 | E12 | `escanor brief` / "good morning" | `morning_briefing` tool → [Briefing.build](../../escanor/assistant/briefing.py) | — | calendar, reminders, timers, weather, journal |
 | E13 | A timer fires | [TimerService._fire](../../escanor/assistant/timers.py) | — | notification + speech (TIMER priority) + CLI print |
 | E14 | "explain this paper <link>" | `enable_tools(research)` → `research_ingest` → `use_skill(learn-anything)` → `research_read` parts | allowed folders for files (D36) | log saved to research/learn/ |
-| E9 | `escanor brain reindex|stats` | [cli.main](../../escanor/cli.py) | — | maintenance |
+| E15 | `escanor usage` / `eval` / `service` / `brain backup` | [cli.main](../../escanor/cli.py) → [ops.py](../../escanor/ops.py), [costs.py](../../escanor/core/costs.py) | run by you | cost report, tool-choice eval, launchd, git backup |
+| E9 | `escanor brain reindex|stats|backup` | [cli.main](../../escanor/cli.py) | — | maintenance |
 | E6 | `/new`, `/skills`, `/tools`, `/models` | [handle_command](../../escanor/cli.py#L130) | — | `/new` also turns extra tool groups off |
 
 ## 4. Call chain (happy path)
@@ -124,6 +125,12 @@ stateDiagram-v2
 - Patter is `AudioOut` priority `DJ`: any reply or confirmation cuts it off; the music resumes regardless.
 - While Escanor talks or listens, [PlayerDucker](../../escanor/music/player.py) lowers the app volume to `duck_level` and restores it.
 
+### Escalation and budget inside a turn
+
+1. [Agent._steps](../../escanor/core/agent.py): "think hard"? → [Router.escalation](../../escanor/core/router.py) → `ModelSwitched(sonnet)` for this turn
+2. every step: `step == after_steps` and same provider → escalate mid-turn; then [DailyBudget.check](../../escanor/core/costs.py) (telemetry `usage_since(local midnight)` × prices) → over cap → `Error` (X13), no call made
+3. [Agent.run_turn](../../escanor/core/agent.py) `finally`: back to the normal model (`ModelSwitched(haiku)`), then any requested `switch_model`
+
 ### Tool internals
 
 - [WebFetchTool.run](../../escanor/assistant/web.py#L188) → [fetch_text](../../escanor/assistant/web.py#L130) → [check_url](../../escanor/assistant/web.py#L49) (scheme, resolve, refuse non-global) → urllib with [_CheckingRedirects](../../escanor/assistant/web.py#L68) → HTML to text → page of 12k chars with a `start=` hint
@@ -145,6 +152,7 @@ stateDiagram-v2
 | X9 | 🛡️ Blocked fetch | non-http(s), local/private address, or redirect to one | [web.py#L49](../../escanor/assistant/web.py#L49) | `✗ … not fetching it` | nothing fetched |
 | X11 | 🎙️ Nothing heard | voice message too short / empty transcript | [server/app.py](../../escanor/server/app.py), [listen.py](../../escanor/voice/listen.py) | "Didn't catch that" | no turn started |
 | X12 | ✋ Interrupted | mic pressed / new message / barge-in (headphones) | [server/app.py `interrupt`](../../escanor/server/app.py) | speech stops, `done: interrupted` | session repaired next turn |
+| X13 | 💸 Budget reached | today's spend ≥ `[budget] daily_usd` | [agent.py](../../escanor/core/agent.py) | `[error] Today's model budget…` | no model call made |
 | X10 | 🔁 Model switched | `switch_model` ran this turn | [agent.py#L137](../../escanor/core/agent.py#L137) | `switched to …` | next turn uses the new model |
 
 ## 6. Low-level design
@@ -182,6 +190,9 @@ stateDiagram-v2
 | [research/ingest.py](../../escanor/research/ingest.py) | arXiv / link / local file → text → research/<slug>/source.md | web.py checks, pypdf |
 | [research/reviews.py](../../escanor/research/reviews.py) | learn-anything logs → reviews due | vault |
 | [research/tools.py](../../escanor/research/tools.py) | research_ingest, research_read, research_reviews (group `research`) | the above |
+| [core/router.py](../../escanor/core/router.py) | When to hand a turn to the stronger model | models |
+| [core/costs.py](../../escanor/core/costs.py) | Prices, cost of usage rows, `DailyBudget` | telemetry |
+| [ops.py](../../escanor/ops.py) | launchd service, brain git backup, tool-choice eval | launchctl, git |
 | [server/](../../escanor/server/) | FastAPI app, WebSocket protocol, static UI | fastapi, uvicorn[standard] |
 | [models/](../../escanor/models/) | Provider-neutral `Model` + four providers + mock | SDKs / urllib |
 
@@ -253,5 +264,7 @@ flowchart TD
 | `[music] daily_model_calls / duck_level` | `150` / `20` | DJ spend cap; music volume while talking |
 | `[assistant] enabled / city` | `true` / `""` | Apple tools + timers + briefing; city for weather |
 | `[research] allowed_dirs` | Downloads, Documents, Desktop | local files research_ingest may read |
+| `[router] escalate_to / after_steps` | `sonnet` / `4` | escalation (D39); `""` = off |
+| `[budget] daily_usd / prices` | `3.0` / `{}` | spend cap (D40) |
 | `[server] host / port` | `127.0.0.1` / `8770` | web UI address (D26) |
 | `ESCANOR_HOME` | `~/.escanor` | data directory |

@@ -331,11 +331,11 @@ Prove the three risky external pieces before building on them.
 **Done when:** "explain this paper <arXiv link>" → plain-language walkthrough with checks for understanding, and a log appears in the brain.
 **Tests:** source ingestion on fixture HTML/PDF; due-review detection from fixture logs.
 
-### Phase 8 — Polish (ongoing)
-- Router: escalate to Sonnet when a turn exceeds N tool steps or the user says "think hard"; show the switch in the UI.
-- Cost/latency dashboard from telemetry.db; daily spend cap per provider.
-- launchd service + menubar icon; backup of `~/.escanor/brain` to git.
-- Evals: a small scripted set of prompts per capability run against each model alias.
+### Phase 8 — Polish (ongoing) ✅ first pass done 2026-10-17
+- [x] Router: escalate to Sonnet when a turn exceeds N tool steps or the user says "think hard"; show the switch in the UI.
+- [x] Cost/latency report (`escanor usage`) from telemetry.db; daily spend cap (all providers, priced).
+- [x] launchd service (`escanor service install`) + [ ] menubar icon; [x] backup of `~/.escanor/brain` to git.
+- [x] Evals: a small scripted set of prompts per capability run against each model alias (`escanor eval --model X`).
 
 ---
 

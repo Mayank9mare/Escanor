@@ -93,6 +93,16 @@ DEFAULTS: dict[str, Any] = {
         # Local files research_ingest may read (the model chooses the path).
         "allowed_dirs": ["~/Downloads", "~/Documents", "~/Desktop"],
     },
+    "router": {
+        # Hand a turn to a stronger model on "think hard", or after N tool steps
+        # (same provider only). escalate_to = "" turns escalation off.
+        "escalate_to": "sonnet",
+        "after_steps": 4,
+    },
+    "budget": {
+        "daily_usd": 3.0,     # stop calling paid models after this much today (0 = no cap)
+        "prices": {},         # extra $/million tokens, e.g. "gpt-5" = [1.25, 10.0]
+    },
     "server": {
         "host": "127.0.0.1",
         "port": 8770,

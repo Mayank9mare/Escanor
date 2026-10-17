@@ -158,7 +158,7 @@ async def test_should_collapse_history_when_model_switched_between_turns(store):
     session = store.create()
     await _collect(agent, session, "one")
     second = MockModel(script=[ModelResponse(text="hi from second")], name="second")
-    agent.set_model(second, "mock:second")
+    agent.set_model(second, "other:second")  # a different provider
     await _collect(agent, session, "two")
     sent = second.calls[0]["messages"]
     assert not any(m["role"] == "tool" for m in sent)
