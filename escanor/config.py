@@ -66,6 +66,20 @@ DEFAULTS: dict[str, Any] = {
         # Folders to search read-only, e.g. an existing Obsidian vault.
         "extra_dirs": [],
     },
+    "voice": {
+        "stt": "faster-whisper",      # faster-whisper (local) | sarvam (cloud) | mock
+        "whisper_model": "base",      # tiny | base | small ... (bigger = slower, more accurate)
+        "tts": "piper",               # piper (local) | sarvam (cloud, Indian English) | mock
+        "tts_voice": "",              # engine default when empty (piper: en_US-lessac-medium)
+        "wake_word": "hey_jarvis",
+        # "off": no talking over Escanor (safe on laptop speakers).
+        # "headphones": interrupt it by talking (needs headphones; see listen.py).
+        "barge_in": "off",
+    },
+    "server": {
+        "host": "127.0.0.1",
+        "port": 8770,
+    },
     "web": {
         # web_fetch refuses localhost / private-network addresses unless true.
         "allow_private_hosts": False,

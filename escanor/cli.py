@@ -2,7 +2,8 @@
 cli.py
 
 `escanor` -- a text chat in the terminal, built on the same agent event
-stream the web UI and voice loop will use.
+stream the web UI and voice loop use. Subcommands: `escanor serve` (web
+UI + push-to-talk), `escanor listen` (hands-free), `escanor brain reindex`.
 
 Commands:
   /model [name]   show the current model, or switch (alias or provider:model-id)
@@ -242,6 +243,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="escanor", description="Escanor, your local assistant.")
     parser.add_argument("--model", help="alias or provider:model-id (default from config: haiku)")
     parser.add_argument("--continue", dest="resume", action="store_true", help="resume the latest conversation")
+    sub = parser.add_subparsers(dest="command")
+    sub.add_parser("chat", help="text chat in the terminal (the default)")
+    serve_cmd = sub.add_parser("serve", help="web UI with push-to-talk at http://127.0.0.1:8770")
+    serve_cmd.add_argument("--port", type=int, help="port (default from config: 8770)")
+    serve_cmd.add_argument("--no-voice", action="store_true", help="text only; don't load speech models")
+    serve_cmd.add_argument("--mute", action="store_true", help="load speech-to-text but never play speech")
+    listen_cmd = sub.add_parser("listen", help="hands-free: wake word, then talk")
+    listen_cmd.add_argument("--enter", action="store_true", help="press Enter instead of saying the wake word")
+    brain_cmd = sub.add_parser("brain", help="second brain maintenance")
+    brain_cmd.add_argument("action", choices=["reindex", "stats"])
     args = parser.parse_args(argv)
 
     config.load_dotenv()
@@ -255,9 +266,35 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     store = default_store()
+    app = build_app(settings, model, spec)
+
+    if args.command == "brain":
+        counts = app.index.sync() if args.action == "reindex" else {"changed": 0, "removed": 0}
+        stats = app.index.stats()
+        print(f"{app.vault.root}: {stats['files']} notes, {stats['chunks']} chunks, {stats['embedded']} embedded "
+              f"({app.index.embedder.name}); re-indexed {counts['changed']}, removed {counts['removed']}")
+        return 0
+
+    if args.command in ("serve", "listen"):
+        from .voice import runtime
+        speech = None
+        if not (args.command == "serve" and args.no_voice):
+            print("Loading speech models…", flush=True)
+            try:
+                speech = runtime.build_speech(settings)
+            except (RuntimeError, ValueError) as e:
+                print(f"escanor: {e}", file=sys.stderr)
+                return 2
+        if args.command == "serve":
+            if args.port:
+                settings["server"]["port"] = args.port
+            runtime.serve(app, store, speech, mute=args.mute)
+        else:
+            runtime.listen(app, store, speech, use_enter=args.enter)
+        return 0
+
     latest = store.latest_id() if args.resume else None
     session = store.load(latest) if latest is not None else store.create()
-    app = build_app(settings, model, spec)
     try:
         asyncio.run(Repl(app, store, session).loop())
     except KeyboardInterrupt:

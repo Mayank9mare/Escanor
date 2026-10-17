@@ -17,6 +17,9 @@ Fixed bugs stay here (struck through) as an audit trail. IDs never get reused.
 | ~~B8~~ | ~~MEDIUM~~ | ~~A cancelled confirmation swallowed the next line you typed~~ | ✅ FIXED | review pass 1 (Phase 2) | step 9 |
 | B9 | LOW | Telemetry stores the whole conversation on every call | ⏸️ DEFERRED | review pass 1 | Phase 8 |
 | B10 | LOW | Collapsing history on a model switch resets message timestamps | 🔴 OPEN | review pass 1 | — |
+| ~~B11~~ | ~~MEDIUM~~ | ~~Speech chunker split sentences inside code blocks~~ | ✅ FIXED | Phase 4 · test | Phase 4 |
+| ~~B12~~ | ~~HIGH~~ | ~~`escanor serve` rejected every WebSocket connection~~ | ✅ FIXED | Phase 4 · test | Phase 4 |
+| ~~B13~~ | ~~HIGH~~ | ~~No WebSocket support in plain uvicorn~~ | ✅ FIXED | Phase 4 · live browser check | Phase 4 |
 
 Severity: **HIGH** = data loss, wrong result, security, blocks testing/release · **MEDIUM** =
 breaks an edge case or error path · **LOW** = minor or cosmetic.
@@ -101,6 +104,30 @@ breaks an edge case or error path · **LOW** = minor or cosmetic.
 - **Fix:** one event-loop stdin reader (`add_reader` + `os.read`) shared by the prompt and confirmations;
   a cancelled wait just stops waiting. [cli.py `StdinLines`](../../escanor/cli.py#L49).
 - **Regression test:** [test_should_deliver_next_line_to_prompt_when_confirmation_cancelled](../../tests/test_cli.py#L55)
+
+### ~~B11. Speech chunker split sentences inside code blocks~~
+
+- **Severity:** MEDIUM · **Found:** Phase 4, by test · **Fixed:** Phase 4
+- **Root cause:** once a code fence closed, the scan for sentence ends also looked inside the fenced
+  code, so `x = 1.` ended a "sentence" and code was read aloud.
+- **Fix:** skip positions inside complete fences ([chunker.py `_fenced_spans`](../../escanor/voice/chunker.py)).
+- **Regression test:** [test_should_wait_for_code_block_to_close_and_not_read_code](../../tests/test_voice.py)
+
+### ~~B12. `escanor serve` rejected every WebSocket connection~~
+
+- **Severity:** HIGH · **Found:** Phase 4, by test · **Fixed:** Phase 4
+- **Root cause:** with `from __future__ import annotations`, FastAPI resolves `ws: WebSocket` by name in
+  module globals; `WebSocket` was imported inside `create_server()`, so FastAPI saw an unknown type and
+  treated `ws` as a required query parameter (close code 1008 "Field required").
+- **Fix:** module-level FastAPI imports ([server/app.py](../../escanor/server/app.py)).
+- **Regression tests:** every test in [test_server.py](../../tests/test_server.py) connects a WebSocket.
+
+### ~~B13. No WebSocket support in plain uvicorn~~
+
+- **Severity:** HIGH · **Found:** Phase 4, live check in the browser pane · **Fixed:** Phase 4
+- **Root cause:** `uvicorn` without extras has no WebSocket library ("Unsupported upgrade request");
+  the FastAPI test client bypasses uvicorn, so tests couldn't see it.
+- **Fix:** depend on `uvicorn[standard]` ([pyproject.toml](../../pyproject.toml)). Verified live: message → streamed reply in the page.
 
 ---
 

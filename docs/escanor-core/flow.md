@@ -1,7 +1,7 @@
 # Escanor core — Flow
 
 How the core works at runtime: where execution starts, every function on the path, every way a
-turn can end, and the low-level design underneath. Last synced: 2026-10-17, Phase 3 complete.
+turn can end, and the low-level design underneath. Last synced: 2026-10-17, Phase 4 complete.
 
 ## 1. In one paragraph
 
@@ -43,6 +43,9 @@ flowchart LR
 | E3 | `/model <name>` | [handle_command](../../escanor/cli.py#L130) → [Agent.set_model](../../escanor/core/agent.py#L115) | name must resolve and build | history fixed up on next turn |
 | E4 | "switch to sonnet" (in words) | `switch_model` tool → [Agent.request_model_switch](../../escanor/core/agent.py#L121) | name must resolve and build | applied when the turn ends ([D13](decision.md#d13-switch_model-takes-effect-after-the-current-turn)) |
 | E5 | Ctrl-C during a reply | SIGINT → `task.cancel()` | only while a turn runs | at the prompt, Ctrl-C exits |
+| E7 | `escanor serve` → browser at :8770 | [voice/runtime.serve](../../escanor/voice/runtime.py) → [server/app.create_server](../../escanor/server/app.py) | binds 127.0.0.1 only | WebSocket per tab; push-to-talk, confirm dialog |
+| E8 | `escanor listen` | [voice/runtime.listen](../../escanor/voice/runtime.py) → [ListenLoop](../../escanor/voice/listen.py) | mic permission | wake word (or Enter) → speak → answer aloud |
+| E9 | `escanor brain reindex|stats` | [cli.main](../../escanor/cli.py) | — | maintenance |
 | E6 | `/new`, `/skills`, `/tools`, `/models` | [handle_command](../../escanor/cli.py#L130) | — | `/new` also turns extra tool groups off |
 
 ## 4. Call chain (happy path)
@@ -68,6 +71,36 @@ flowchart LR
             2. [Session.append_tool_result](../../escanor/core/session.py#L143) → `ToolFinished`
       5. pending switch applied → `ModelSwitched`
 
+### E7/E8 — A spoken turn
+
+```mermaid
+sequenceDiagram
+  participant U as You
+  participant UI as Browser / mic
+  participant S as server or ListenLoop
+  participant STT as Whisper
+  participant A as Agent (spoken=True)
+  participant C as SentenceChunker
+  participant O as AudioOut
+  U->>UI: hold mic / "hey Jarvis …"
+  UI->>S: WAV (16-bit mono)
+  S->>STT: transcribe (thread)
+  STT-->>S: text
+  S->>A: speak_turn(text)
+  A-->>C: TextDelta…
+  C-->>O: sentence 1 (synth starts at once)
+  O-->>U: afplay sentence 1 (music ducked)
+  C-->>O: sentence 2 (synthesised while 1 plays)
+  U->>UI: press mic / new message
+  UI->>S: interrupt → audio.interrupt() + cancel turn
+```
+
+1. [server/app.py `conversation`](../../escanor/server/app.py): `audio` message → `speech.transcribe` on a thread → `{type: user}` → task `run(text, voice_input=True)`
+   1. [speak_turn](../../escanor/voice/conversation.py): `agent.run_turn(spoken=True)` adds [VOICE_STYLE](../../escanor/core/prompts.py) to the system prompt
+   2. each `TextDelta` → [SentenceChunker.feed](../../escanor/voice/chunker.py) → [AudioOut.say](../../escanor/voice/audio_out.py) (synthesis starts immediately, serialised by a lock)
+   3. [AudioOut._run](../../escanor/voice/audio_out.py): highest priority first; ducks music; `afplay`; restores music when the queue drains (in `finally`)
+2. Confirmations: [WebConfirmer](../../escanor/server/app.py) shows a dialog and says the question at `CONFIRM` priority; in `listen`, [VoiceConfirmer](../../escanor/voice/conversation.py) asks aloud and accepts only a clear yes ([is_yes](../../escanor/voice/conversation.py)).
+
 ### Tool internals
 
 - [WebFetchTool.run](../../escanor/assistant/web.py#L188) → [fetch_text](../../escanor/assistant/web.py#L130) → [check_url](../../escanor/assistant/web.py#L49) (scheme, resolve, refuse non-global) → urllib with [_CheckingRedirects](../../escanor/assistant/web.py#L68) → HTML to text → page of 12k chars with a `start=` hint
@@ -87,6 +120,8 @@ flowchart LR
 | X7 | 🔧 Tool error | tool raises / unknown / bad args / group off | [registry.py#L61](../../escanor/tools/registry.py#L61) | `✗ …` dimmed | error result fed back; turn continues |
 | X8 | 🙅 Declined | you answer anything but y/yes, or no confirmer | [permissions.py#L46](../../escanor/tools/permissions.py#L46) | `✗ The user declined…` | tool not run; model told not to retry |
 | X9 | 🛡️ Blocked fetch | non-http(s), local/private address, or redirect to one | [web.py#L49](../../escanor/assistant/web.py#L49) | `✗ … not fetching it` | nothing fetched |
+| X11 | 🎙️ Nothing heard | voice message too short / empty transcript | [server/app.py](../../escanor/server/app.py), [listen.py](../../escanor/voice/listen.py) | "Didn't catch that" | no turn started |
+| X12 | ✋ Interrupted | mic pressed / new message / barge-in (headphones) | [server/app.py `interrupt`](../../escanor/server/app.py) | speech stops, `done: interrupted` | session repaired next turn |
 | X10 | 🔁 Model switched | `switch_model` ran this turn | [agent.py#L137](../../escanor/core/agent.py#L137) | `switched to …` | next turn uses the new model |
 
 ## 6. Low-level design
@@ -108,6 +143,12 @@ flowchart LR
 | [brain/index.py](../../escanor/brain/index.py) | Heading chunks, FTS5 + numpy cosine, RRF merge, incremental sync | SQLite, numpy, embedder |
 | [brain/embeddings.py](../../escanor/brain/embeddings.py) | Ollama `nomic-embed-text`, hash, none | Ollama HTTP |
 | [brain/tools.py](../../escanor/brain/tools.py) | The seven brain tools + brain guidance prompt | vault, index |
+| [voice/stt, voice/tts, speech.py](../../escanor/voice/) | Whisper / Piper / Sarvam / mock engines (copied from kmare-voice) | faster-whisper, piper-tts |
+| [voice/chunker.py](../../escanor/voice/chunker.py) | Fragments → speakable sentences | — |
+| [voice/audio_out.py](../../escanor/voice/audio_out.py) | The only speaker owner: priority, pipelining, ducking, interrupt | afplay |
+| [voice/conversation.py](../../escanor/voice/conversation.py) | `speak_turn`, `VoiceConfirmer` | agent, AudioOut |
+| [voice/listen.py](../../escanor/voice/listen.py) | Wake word, energy VAD, utterance recording, `ListenLoop` | sounddevice, openWakeWord (optional) |
+| [server/](../../escanor/server/) | FastAPI app, WebSocket protocol, static UI | fastapi, uvicorn[standard] |
 | [models/](../../escanor/models/) | Provider-neutral `Model` + four providers + mock | SDKs / urllib |
 
 ### Tool catalogue
@@ -169,4 +210,9 @@ flowchart TD
 | `[brain] embedder` | `ollama` | `ollama` / `hash` / `none`; falls back to keywords when Ollama is down |
 | `[brain] extra_dirs` | `[]` | read-only folders to search (e.g. Obsidian) |
 | `[web] allow_private_hosts` | `false` | X9 off when true ([D12](decision.md#d12-web_fetch-refuses-local-and-private-addresses-re-checked-on-every-redirect)) |
+| `[voice] stt / whisper_model` | `faster-whisper` / `base` | speech-to-text |
+| `[voice] tts / tts_voice` | `piper` / default `en_US-lessac-medium` | text-to-speech (reuses `~/.kmare/voices`) |
+| `[voice] wake_word` | `hey_jarvis` | openWakeWord model |
+| `[voice] barge_in` | `off` | `headphones` enables talking over Escanor in `listen` (D24) |
+| `[server] host / port` | `127.0.0.1` / `8770` | web UI address (D26) |
 | `ESCANOR_HOME` | `~/.escanor` | data directory |

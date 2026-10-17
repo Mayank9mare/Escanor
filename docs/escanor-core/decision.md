@@ -28,6 +28,12 @@ what we're trading away. Newest at the bottom. Reversed decisions are marked **S
 | D18 | Your own vault is trusted; attached folders are fenced as untrusted | Accepted | 2026-10-17 |
 | D19 | Brain tools split: search/read/remember in core, editing in a `brain` group | Accepted | 2026-10-17 |
 | D20 | facts.md is a plain bullet list, newest kept when over the prompt budget | Accepted | 2026-10-17 |
+| D21 | Speech plays through `afplay`, owned by one `AudioOut` | Accepted | 2026-10-17 |
+| D22 | Energy-based voice detection instead of Silero | Accepted | 2026-10-17 |
+| D23 | Only replies to voice input are spoken (typed: opt-in) | Accepted | 2026-10-17 |
+| D24 | Barge-in: always by mic/new message in the web UI; by voice only with headphones | Accepted | 2026-10-17 |
+| D25 | Kokoro TTS deferred | Accepted | 2026-10-17 |
+| D26 | Web UI on port 8770 (8765 is TradeMare's) | Accepted | 2026-10-17 |
 
 ---
 
@@ -478,3 +484,110 @@ A. The skill runtime note tells skills like learn-anything to enable the group b
 
 ### Decision
 A ([vault.py `facts_section`](../../escanor/brain/vault.py)). Facts change rarely, so the prompt cache survives most turns.
+
+---
+
+## D21. Speech plays through `afplay`, owned by one `AudioOut`
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 4
+
+### Context
+Replies, confirmations, timers and DJ patter all need the speaker, and must never talk over each
+other. Speech should play even with no browser open (timers, DJ).
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. One `AudioOut` with a priority queue; `afplay` subprocess per sentence** | Built into macOS, no audio dependency; stop = kill the process | ~50 ms process start per sentence; macOS only |
+| B. `sounddevice` stream | Gapless, cross-platform | Extra native dependency; device handling |
+| C. Browser plays everything | Simple server | No speech without the page open |
+
+### Decision
+A ([audio_out.py](../../escanor/voice/audio_out.py)). The browser is only a sink when used from another device (`speech=browser`).
+
+### Revisit if
+Gaps between sentences are noticeable → B behind the same `Player` interface.
+
+---
+
+## D22. Energy-based voice detection instead of Silero
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 4
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. RMS above an adaptive noise floor** | No model, no dependency, testable with synthetic audio | Fooled by loud music/TV; less precise endpoints |
+| B. Silero VAD | Robust to noise | Model download + onnx/torch dependency |
+
+### Decision
+A ([listen.py `EnergyVAD`](../../escanor/voice/listen.py)) behind a `VAD` protocol, so Silero can drop in.
+
+### Revisit if
+`escanor listen` cuts you off or never stops recording in a normal room.
+
+---
+
+## D23. Only replies to voice input are spoken (typed: opt-in)
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 4
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. Speak replies to voice input; "speak typed replies" toggle for the rest** | Typing stays quiet; answers keep their full written form | One more toggle |
+| B. Speak everything | Consistent | Noisy, and every reply gets the short spoken style |
+
+### Decision
+A. Spoken turns also get the spoken style section in the system prompt ([prompts.py `VOICE_STYLE`](../../escanor/core/prompts.py)).
+
+---
+
+## D24. Barge-in: always by mic/new message in the web UI; by voice only with headphones
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 4
+
+### Context
+Through laptop speakers the mic hears Escanor and would interrupt it constantly. The Phase 0 echo
+test (still to run, needs you) decides whether software echo cancellation fixes that.
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. Web UI: pressing the mic or sending anything interrupts. `listen`: voice barge-in only with `[voice] barge_in = "headphones"`** | Never interrupts itself; explicit interrupt always works | No talking-over on speakers yet |
+| B. Voice barge-in everywhere | Most natural | Self-interruption on speakers |
+
+### Decision
+A. The browser asks for `echoCancellation: true` anyway, so the web path is ready if the echo test passes.
+
+---
+
+## D25. Kokoro TTS deferred
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 4
+
+### Context
+The plan lists Kokoro as a higher-quality local voice. Piper (and Sarvam's Bulbul) already work and are verified.
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. Defer; Piper default** | No unverified code; Piper round-trip verified (0.6 s synth, exact Whisper transcript) | Piper sounds more robotic |
+| B. Add an untested Kokoro engine | Better voice, maybe | Model download, unverified dependency chain |
+
+### Decision
+A. Add it as another `TTSEngine` when you want to compare voices (open question 2 in the plan).
+
+---
+
+## D26. Web UI on port 8770 (8765 is TradeMare's)
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 4
+
+Your TradeMare web server already listens on 8765. Escanor defaults to 8770; change it with
+`[server] port` or `escanor serve --port`.

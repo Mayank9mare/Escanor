@@ -1,7 +1,7 @@
 # Escanor core — Review Guide
 
-**Branch:** `main` · **Scope:** Phases 1–3 (scaffold, async CLI, tools, permissions, web, skills, second brain) ·
-**Tests:** 122 passing · **Updated:** 2026-10-17
+**Branch:** `main` · **Scope:** Phases 1–4 (core, tools, web, skills, second brain, voice + web UI) ·
+**Tests:** 160 passing · **Updated:** 2026-10-17
 
 ## TL;DR (read this first)
 
@@ -39,8 +39,14 @@ Read in this order: it follows a message from the model interface up to the term
 | 16 ⭐ | [brain/index.py](../../escanor/brain/index.py) | Search over notes | incremental sync; embedder back-off; RRF merge | 250 |
 | 17 | [brain/tools.py](../../escanor/brain/tools.py), [brain/embeddings.py](../../escanor/brain/embeddings.py) | Brain tools, embedders | facts tools are `affects_prompt`; attached folders fenced ([D18](decision.md#d18-your-own-vault-is-trusted-attached-folders-are-fenced-as-untrusted)) | 300 |
 | 18 | [app.py](../../escanor/app.py) | Puts it all together | which tools and sections are installed | 110 |
-| 19 | [cli.py](../../escanor/cli.py) | Terminal chat | `StdinLines` ([B8](bugs.md)); Ctrl-C cancels only the turn | 270 |
-| 20 | [tests/](../../tests/) | 122 offline tests | error paths, not just happy paths | — |
+| 19 | [voice/chunker.py](../../escanor/voice/chunker.py) | Turns streamed text into sentences to speak | abbreviations, numbers, code fences ([B11](bugs.md)) | 110 |
+| 20 ⭐ | [voice/audio_out.py](../../escanor/voice/audio_out.py) | The one thing that plays sound | priority preemption; ducking restored in `finally`; interrupt | 230 |
+| 21 | [voice/conversation.py](../../escanor/voice/conversation.py) | Speak a turn; spoken yes/no | `is_yes` rejects "yes… no" | 70 |
+| 22 | [voice/listen.py](../../escanor/voice/listen.py) | Hands-free loop | end-of-speech timing; mic drained after speaking | 260 |
+| 23 ⭐ | [server/app.py](../../escanor/server/app.py) | Web UI backend | new message cancels the running turn; confirm futures; 127.0.0.1 only | 240 |
+| 24 | [server/static/](../../escanor/server/static/) | The page | push-to-talk WAV encoding; dialog | 300 |
+| 25 | [cli.py](../../escanor/cli.py) | Terminal chat | `StdinLines` ([B8](bugs.md)); Ctrl-C cancels only the turn | 270 |
+| 26 | [tests/](../../tests/) | 160 offline tests | error paths, not just happy paths | — |
 
 Skip or skim: [telemetry.py](../../escanor/telemetry.py) (copied, path renamed),
 [assistant/web_search.py](../../escanor/assistant/web_search.py) (copied DuckDuckGo scraper).
@@ -93,6 +99,20 @@ text so the model treats it as data.
 **Look closely at:** [L49–L75](../../escanor/assistant/web.py#L49-L75) `check_url` and redirect re-check.
 
 - [ ] **QUESTION** DNS rebinding is not covered (D12 trade-off). OK while every fetch is visible in the chat?
+
+### 20. [audio_out.py](../../escanor/voice/audio_out.py) ⭐
+
+**In simple words:** a queue in front of the speaker. More important speech cuts in; music is turned
+down while anything is said and turned back up after, even if something crashes.
+
+- [ ] **VERIFY** with `escanor serve`: hold the mic, ask something, then press the mic again while it answers. Speech should stop at once.
+
+### 23. [server/app.py](../../escanor/server/app.py) ⭐
+
+**In simple words:** one WebSocket per tab carries the whole conversation; anything you send while
+Escanor is busy interrupts it first.
+
+- [ ] **QUESTION** speech plays on the Mac even when you use the page from your phone unless you open it with `?speech=browser`. OK as the default?
 
 ## Things to decide together
 

@@ -30,6 +30,11 @@ How to answer:
   controlling apps) needs the user's confirmation; the system asks for it, so
   just call the tool and respect the answer."""
 
+VOICE_STYLE = """\
+This conversation is spoken: your reply is read aloud. Answer in one to three short sentences of
+plain speech. No Markdown, lists, tables, code or URLs; describe them in words instead, and offer
+to show details on screen. Say numbers and times the way a person would."""
+
 Section = Callable[[], str]
 
 
@@ -43,10 +48,12 @@ class PromptBuilder:
     def add_section(self, section: Section) -> None:
         self.sections.append(section)
 
-    def system_prompt(self) -> str:
+    def system_prompt(self, spoken: bool = False) -> str:
         parts = [self.persona, f"Today's date: {self._today().isoformat()}."]
         parts += [text for text in (section() for section in self.sections) if text]
+        if spoken:
+            parts.append(VOICE_STYLE)
         return "\n\n".join(parts)
 
-    def build(self, session: Session) -> list[dict]:
-        return [{"role": "system", "content": self.system_prompt()}, *session.messages]
+    def build(self, session: Session, spoken: bool = False) -> list[dict]:
+        return [{"role": "system", "content": self.system_prompt(spoken)}, *session.messages]

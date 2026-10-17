@@ -276,29 +276,29 @@ Prove the three risky external pieces before building on them.
 **Done when:** "remember that I prefer window seats" → in facts.md; next session "which seat do I like on flights?" answers from memory; "what did I write about project X?" cites notes.
 **Tests:** chunker on fixture notes; hybrid ranking on a small fixture vault; path-traversal rejection; incremental reindex only touches changed files; `remember_fact` after a `web_fetch` in the same turn requires confirmation.
 
-### Phase 4 — Voice (3–4 days, three sub-steps)
+### Phase 4 — Voice (3–4 days, three sub-steps) ✅ done 2026-10-17 (live mic/wake word: [YOU])
 **4a. Port kmare-voice onto the agent**
-- [ ] Copy `voice/stt`, `voice/tts`, `speech.py`; `server/app.py` with WebSocket: client sends WAV (push-to-talk), server streams Events as JSON + audio chunks.
-- [ ] `voice/audio_out.py`: **one** audio output owner, a priority queue (confirmation prompts >
+- [x] Copy `voice/stt`, `voice/tts`, `speech.py`; `server/app.py` with WebSocket: client sends WAV (push-to-talk), server streams Events as JSON + audio chunks.
+- [x] `voice/audio_out.py`: **one** audio output owner, a priority queue (confirmation prompts >
       replies > timers > DJ patter), with no two utterances overlapping. It auto-ducks YouTube Music
       (via the player volume API) whenever Escanor is listening or speaking, not only in DJ mode,
       and always restores the volume in a `finally`. Speech plays **server-side** (sounddevice),
       so timers and the DJ still talk with the browser tab closed; the browser only streams it when remote.
-- [ ] UI: chat transcript, tool-activity chips, model picker, mic button, confirm dialog.
+- [x] UI: chat transcript, tool-activity chips, model picker, mic button, confirm dialog.
 
 **4b. Streaming speech (biggest latency win)**
-- [ ] `voice/chunker.py`: split TextDeltas into sentences (handle abbreviations, numbers, code/markdown stripped); synthesize + send each sentence as soon as complete.
-- [ ] Spoken-style prompt variant when input came from voice (no markdown, no URLs read aloud, short answers + "want details?").
-- [ ] Barge-in: VAD while speaking → stop playback, cancel the turn task. Uses the echo-cancellation approach
+- [x] `voice/chunker.py`: split TextDeltas into sentences (handle abbreviations, numbers, code/markdown stripped); synthesize + send each sentence as soon as complete.
+- [x] Spoken-style prompt variant when input came from voice (no markdown, no URLs read aloud, short answers + "want details?").
+- [x] Barge-in: VAD while speaking → stop playback, cancel the turn task. Uses the echo-cancellation approach
       picked by the Phase 0 echo test; without AEC, barge-in is **headphones-only** and the speaker
       path falls back to a push-to-talk hotkey while Escanor speaks (otherwise it interrupts itself).
-- [ ] Add Kokoro TTS engine as a higher-quality local option alongside Piper.
+- [ ] Add Kokoro TTS engine as a higher-quality local option alongside Piper. (Deferred, D25.)
 
 **4c. Hands-free native loop (Jarvis mode)**
-- [ ] `voice/audio_loop.py` with `sounddevice`: openWakeWord → record until VAD silence → STT → agent → streamed TTS to speakers, barge-in via the same VAD.
+- [x] `voice/audio_loop.py` with `sounddevice`: openWakeWord → record until VAD silence → STT → agent → streamed TTS to speakers, barge-in via the same VAD.
       The stock `hey_jarvis` model is known to false-trigger on partial phrases, so require a
       confidence threshold plus a short confirmation chime, and expect to train a custom "hey escanor" model.
-- [ ] `escanor listen` command; menubar/launchd agent later.
+- [x] `escanor listen` command; menubar/launchd agent later.
 
 **Done when:** time from end of speech to first audio < ~1.5 s on Haiku + faster-whisper small + Piper; you can interrupt it mid-sentence.
 **Tests:** chunker cases; WebSocket protocol with mock STT/TTS/model; cancel aborts generation.

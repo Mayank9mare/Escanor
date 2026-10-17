@@ -134,23 +134,25 @@ class Agent:
     def tool_schemas(self) -> list[dict]:
         return self.tools.schemas()
 
-    async def run_turn(self, session: Session, user_text: str, confirmer: Confirmer | None = None) -> AsyncIterator[Event]:
+    async def run_turn(self, session: Session, user_text: str, confirmer: Confirmer | None = None,
+                       spoken: bool = False) -> AsyncIterator[Event]:
+        """One turn. spoken=True asks for a reply suited to being read aloud."""
         try:
-            async for event in self._steps(session, user_text, confirmer or DenyConfirmer()):
+            async for event in self._steps(session, user_text, confirmer or DenyConfirmer(), spoken):
                 yield event
         finally:
             switched_to = self._apply_pending_switch()
         if switched_to:
             yield ModelSwitched(switched_to)
 
-    async def _steps(self, session: Session, user_text: str, confirmer: Confirmer) -> AsyncIterator[Event]:
+    async def _steps(self, session: Session, user_text: str, confirmer: Confirmer, spoken: bool) -> AsyncIterator[Event]:
         session.repair()
         session.collapse_tool_history(self.model_spec)
         session.append_user(user_text)
         usage = {"input_tokens": 0, "output_tokens": 0}
 
         for _ in range(self.max_steps):
-            messages = self.prompts.build(session)
+            messages = self.prompts.build(session, spoken)
             schemas = self.tool_schemas() or None
             response: ModelResponse | None = None
             try:
