@@ -5,7 +5,8 @@ and voice. See [PLAN.md](PLAN.md) for what it will be and
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how it's being built.
 
 **Status:** Phases 1–4 done: chat with switchable models (Haiku, Sonnet, GPT, Gemini, Ollama), web search
-and reading, skills, a second brain of Markdown notes, and voice (web push-to-talk and hands-free).
+and reading, skills, a second brain of Markdown notes, voice (web push-to-talk and hands-free), an AI DJ
+on YouTube Music, and Apple Reminders/Calendar, timers and a morning briefing (`escanor brief`).
 
 ## Quickstart
 
@@ -29,6 +30,14 @@ uv pip install -e ".[listen]"
 
 Speech-to-text is Whisper and text-to-speech is Piper, both local; models already downloaded by
 kmare-voice are reused.
+
+## YouTube Music DJ
+
+1. Install the [YouTube Music desktop app](https://github.com/th-ch/youtube-music), sign in, enable
+   **Plugins → API Server**, and set its hostname to `127.0.0.1`.
+2. `uv pip install -e ".[music]"` then `.venv/bin/escanor music connect` (click Allow in the app; optionally
+   paste your browser headers so the DJ knows your history and likes).
+3. Say or type "DJ mode, chill evening".
 
 ## In the chat
 

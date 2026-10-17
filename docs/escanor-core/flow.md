@@ -1,7 +1,7 @@
 # Escanor core — Flow
 
 How the core works at runtime: where execution starts, every function on the path, every way a
-turn can end, and the low-level design underneath. Last synced: 2026-10-17, Phase 5 complete.
+turn can end, and the low-level design underneath. Last synced: 2026-10-17, Phase 6 complete.
 
 ## 1. In one paragraph
 
@@ -47,6 +47,8 @@ flowchart LR
 | E8 | `escanor listen` | [voice/runtime.listen](../../escanor/voice/runtime.py) → [ListenLoop](../../escanor/voice/listen.py) | mic permission | wake word (or Enter) → speak → answer aloud |
 | E10 | `escanor music connect|status` | [cli.music_command](../../escanor/cli.py) | — | app token (click Allow) + optional ytmusicapi login |
 | E11 | DJ background task | [DJ._loop](../../escanor/music/dj.py) every 2 s | started by `dj_start` | runs inside `serve` / `listen` / chat |
+| E12 | `escanor brief` / "good morning" | `morning_briefing` tool → [Briefing.build](../../escanor/assistant/briefing.py) | — | calendar, reminders, timers, weather, journal |
+| E13 | A timer fires | [TimerService._fire](../../escanor/assistant/timers.py) | — | notification + speech (TIMER priority) + CLI print |
 | E9 | `escanor brain reindex|stats` | [cli.main](../../escanor/cli.py) | — | maintenance |
 | E6 | `/new`, `/skills`, `/tools`, `/models` | [handle_command](../../escanor/cli.py#L130) | — | `/new` also turns extra tool groups off |
 
@@ -172,6 +174,10 @@ stateDiagram-v2
 | [music/library.py](../../escanor/music/library.py) | search, radio, history, likes (cached 10 min) | ytmusicapi |
 | [music/dj.py](../../escanor/music/dj.py) | DJ loop, picking, intros, `SpendGuard` | player, library, model, AudioOut |
 | [music/tools.py](../../escanor/music/tools.py) | 7 music tools (group `music`) | the above |
+| [assistant/osa.py](../../escanor/assistant/osa.py) | Safe AppleScript: quoting, locale-proof dates, permission errors | osascript |
+| [assistant/apple.py](../../escanor/assistant/apple.py) | Reminders, Calendar, notify, open app/url, clipboard (9 tools, group `assistant`) | osa |
+| [assistant/timers.py](../../escanor/assistant/timers.py) | Timers + announcers | asyncio |
+| [assistant/briefing.py](../../escanor/assistant/briefing.py) | Morning briefing sources | apple, timers, vault, web |
 | [server/](../../escanor/server/) | FastAPI app, WebSocket protocol, static UI | fastapi, uvicorn[standard] |
 | [models/](../../escanor/models/) | Provider-neutral `Model` + four providers + mock | SDKs / urllib |
 
@@ -241,5 +247,6 @@ flowchart TD
 | `[music] enabled / api_url` | `true` / `http://127.0.0.1:26538` | YouTube Music app API Server plugin |
 | `[music] dj_model / patter_every` | `haiku` / `2` | who picks and talks; intro every Nth track |
 | `[music] daily_model_calls / duck_level` | `150` / `20` | DJ spend cap; music volume while talking |
+| `[assistant] enabled / city` | `true` / `""` | Apple tools + timers + briefing; city for weather |
 | `[server] host / port` | `127.0.0.1` / `8770` | web UI address (D26) |
 | `ESCANOR_HOME` | `~/.escanor` | data directory |

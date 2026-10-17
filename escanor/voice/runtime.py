@@ -13,15 +13,18 @@ import sys
 from ..app import Escanor
 from ..core.session import SessionStore
 from .audio_out import DJ as DJ_PRIORITY
-from .audio_out import AfplayPlayer, AudioOut, NullPlayer
+from .audio_out import TIMER, AfplayPlayer, AudioOut, NullPlayer
 from .speech import SpeechEngine
 
 
 def attach_dj_voice(app: Escanor, audio: AudioOut) -> None:
-    """Give the DJ the speaker, at the lowest priority."""
+    """Give the speaker to the DJ (lowest priority) and to timers."""
     dj = app.services.get("dj")
     if dj is not None:
         dj.say = lambda text: audio.say(text, DJ_PRIORITY)
+    timers = app.services.get("timers")
+    if timers is not None:
+        timers.announcers.append(lambda message: audio.say(message, TIMER))
 
 
 def build_speech(settings: dict) -> SpeechEngine:

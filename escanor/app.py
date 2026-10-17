@@ -29,6 +29,7 @@ from .tools.system_tools import EnableToolsTool, GetTimeTool, SwitchModelTool
 GROUP_DESCRIPTIONS = {
     "brain": "write, append to and list notes in the second brain; forget facts",
     "music": "play, queue and control YouTube Music; DJ mode with spoken intros",
+    "assistant": "Apple Reminders and Calendar, opening apps/links, notifications, clipboard, timers",
 }
 
 
@@ -101,7 +102,46 @@ def build_app(settings: dict, model: Model, model_spec: str) -> Escanor:
     escanor = Escanor(agent=agent, settings=settings, skills=skills, vault=vault, index=index)
     if settings["music"]["enabled"]:
         install_music(escanor)
+    if settings["assistant"]["enabled"]:
+        install_assistant(escanor)
     return escanor
+
+
+def install_assistant(escanor: Escanor) -> None:
+    """Reminders, Calendar, Mac actions, timers and the morning briefing.
+    Timers announce through every channel attached to `timers.announcers`:
+    a notification here, speech (voice runtime) and printing (CLI)."""
+    from .assistant.apple import Apple, apple_tools, format_events
+    from .assistant.briefing import Briefing, BriefingTool, due_today_first, weather_source
+    from .assistant.timers import SetTimerTool, TimerCancelTool, TimersListTool, TimerService
+    from .assistant.web_search import web_search
+
+    apple = Apple()
+    timers = TimerService()
+    timers.announcers.append(lambda message: apple.notify("Escanor", message))
+
+    briefing = Briefing()
+    midnight = lambda: apple.now().replace(hour=0, minute=0, second=0, microsecond=0)  # noqa: E731
+    briefing.add("Calendar today", lambda: format_events(apple.events(midnight(), 1)))
+    briefing.add("Reminders", lambda: due_today_first(apple.reminders(), apple.now().date().isoformat()))
+    briefing.add("Timers", lambda: "\n".join(timers.describe(t) for t in timers.timers.values()))
+    city = escanor.settings["assistant"].get("city")
+    if city:
+        briefing.add(f"Weather in {city}", weather_source(web_search, city))
+    briefing.add("Latest journal entry", lambda: _latest_journal(escanor.vault))
+
+    for tool in (*apple_tools(apple), SetTimerTool(timers), TimersListTool(timers), TimerCancelTool(timers),
+                 BriefingTool(briefing)):
+        escanor.agent.tools.add(tool)
+    escanor.services.update(apple=apple, timers=timers, briefing=briefing)
+
+
+def _latest_journal(vault: Vault) -> str:
+    entries = vault.list("journal")
+    if not entries:
+        return ""
+    text = vault.read(entries[-1])
+    return f"{entries[-1]}:\n{text[-600:].strip()}"
 
 
 def install_music(escanor: Escanor) -> None:

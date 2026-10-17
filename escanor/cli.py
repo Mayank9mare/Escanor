@@ -214,8 +214,11 @@ class Repl:
             except (NotImplementedError, RuntimeError):
                 pass
 
-    async def loop(self) -> None:
+    async def loop(self, first_message: str | None = None) -> None:
         print(_dim(f"Escanor · {self.agent.model_spec} · conversation #{self.session.id} · /help for commands"))
+        if first_message:
+            print(_bold("escanor › "), end="", flush=True)
+            await self.run_turn_interruptible(first_message)
         self.lines.start()
         try:
             await self._loop()
@@ -292,6 +295,7 @@ def main(argv: list[str] | None = None) -> int:
     listen_cmd.add_argument("--enter", action="store_true", help="press Enter instead of saying the wake word")
     brain_cmd = sub.add_parser("brain", help="second brain maintenance")
     brain_cmd.add_argument("action", choices=["reindex", "stats"])
+    sub.add_parser("brief", help="your morning briefing, then the chat")
     music_cmd = sub.add_parser("music", help="connect YouTube Music")
     music_cmd.add_argument("action", choices=["connect", "status"])
     args = parser.parse_args(argv)
@@ -339,8 +343,12 @@ def main(argv: list[str] | None = None) -> int:
 
     latest = store.latest_id() if args.resume else None
     session = store.load(latest) if latest is not None else store.create()
+    timers = app.services.get("timers")
+    if timers is not None:
+        timers.announcers.append(lambda message: print(f"\n⏰ {message}", flush=True))
+    first = "Good morning! Give me my briefing." if args.command == "brief" else None
     try:
-        asyncio.run(Repl(app, store, session).loop())
+        asyncio.run(Repl(app, store, session).loop(first_message=first))
     except KeyboardInterrupt:
         print()
     return 0

@@ -1,7 +1,7 @@
 # Escanor core — Review Guide
 
-**Branch:** `main` · **Scope:** Phases 1–5 (core, tools, web, skills, second brain, voice + web UI, YouTube Music DJ) ·
-**Tests:** 180 passing · **Updated:** 2026-10-17
+**Branch:** `main` · **Scope:** Phases 1–6 (core, tools, web, skills, brain, voice, DJ, reminders/calendar/timers) ·
+**Tests:** 200 passing · **Updated:** 2026-10-17
 
 ## TL;DR (read this first)
 
@@ -49,8 +49,11 @@ Read in this order: it follows a message from the model interface up to the term
 | 26 | [music/library.py](../../escanor/music/library.py) | Finds songs | expired cookies → note, not crash | 140 |
 | 27 ⭐ | [music/dj.py](../../escanor/music/dj.py) | The DJ | play resumes in `finally`; spend cap; no repeats ([D29](decision.md#d29-dj-v1-pause--speak--play-the-model-picks-from-radio--likes)) | 250 |
 | 28 | [music/tools.py](../../escanor/music/tools.py) | Music tools | `write` level ([D27](decision.md#d27-music-tools-are-write-not-external)) | 160 |
-| 29 | [cli.py](../../escanor/cli.py) | Terminal chat | `StdinLines` ([B8](bugs.md)); Ctrl-C cancels only the turn | 270 |
-| 30 | [tests/](../../tests/) | 180 offline tests | error paths, not just happy paths | — |
+| 29 ⭐ | [assistant/osa.py](../../escanor/assistant/osa.py) | Runs AppleScript safely | `quote()` on every model value; `date_expr` day-1 trick | 80 |
+| 30 | [assistant/apple.py](../../escanor/assistant/apple.py) | Reminders, Calendar, Mac actions | which tools are `external` ([D32](decision.md#d32-open_url-asks-first-clipboard-text-is-untrusted)) | 300 |
+| 31 | [assistant/timers.py](../../escanor/assistant/timers.py), [briefing.py](../../escanor/assistant/briefing.py) | Timers, morning briefing | a failing announcer/source doesn't stop the others | 220 |
+| 32 | [cli.py](../../escanor/cli.py) | Terminal chat | `StdinLines` ([B8](bugs.md)); Ctrl-C cancels only the turn | 270 |
+| 33 | [tests/](../../tests/) | 200 offline tests | error paths, not just happy paths | — |
 
 Skip or skim: [telemetry.py](../../escanor/telemetry.py) (copied, path renamed),
 [assistant/web_search.py](../../escanor/assistant/web_search.py) (copied DuckDuckGo scraper).
@@ -124,6 +127,14 @@ Escanor is busy interrupts it first.
 and, every couple of songs, introduces it: pause, speak, play.
 
 - [ ] **VERIFY** after `escanor music connect`: `escanor serve`, say "DJ mode, chill evening", let two songs pass.
+
+### 29. [osa.py](../../escanor/assistant/osa.py) ⭐
+
+**In simple words:** the only place AppleScript is written from model text. Everything is quoted, and
+dates are built from numbers so your region settings can't scramble them.
+
+- [ ] **VERIFY** live: "what's on today?" then "remind me to call mom at 7 tonight". The first time,
+  macOS asks to let your terminal control Calendar/Reminders.
 
 ## Things to decide together
 

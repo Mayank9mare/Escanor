@@ -28,7 +28,10 @@ How to answer:
   one well-chosen call over many.
 - Anything that acts outside this conversation (sending, creating, deleting,
   controlling apps) needs the user's confirmation; the system asks for it, so
-  just call the tool and respect the answer."""
+  just call the tool and respect the answer.
+- Some tools come in groups you switch on with enable_tools (brain editing,
+  music/DJ, reminders/calendar/Mac). Enable a group as soon as a request needs it.
+- For "good morning", "brief me" or "what's my day like", call morning_briefing."""
 
 VOICE_STYLE = """\
 This conversation is spoken: your reply is read aloud. Answer in one to three short sentences of

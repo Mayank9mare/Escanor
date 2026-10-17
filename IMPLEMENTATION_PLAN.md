@@ -314,10 +314,10 @@ Prove the three risky external pieces before building on them.
 **Done when:** a 30-minute DJ session runs unattended with sensible picks and intros that don't talk over vocals at full volume.
 **Tests:** fake th-ch server (FastAPI in tests/fakes) for player + DJ state machine; ducking restores volume even when TTS fails.
 
-### Phase 6 — Personal assistant (2 days)
-- [ ] `assistant/reminders.py`, `calendar.py` via AppleScript (read = `read`, create/modify = `external`).
-- [ ] `assistant/mac.py`: open app/url, notification, clipboard read.
-- [ ] `set_timer` (moved from Phase 2, D15) + timers/alarms spoken through TTS; daily briefing command ("good morning": calendar, reminders, weather via web, top unread brain journal prompt).
+### Phase 6 — Personal assistant (2 days) ✅ done 2026-10-17 (live Apple permissions: [YOU])
+- [x] `assistant/apple.py` (reminders + calendar) via AppleScript (read = `read`, create/modify = `external`).
+- [x] Mac actions in `assistant/apple.py`: open app/url, notification, clipboard read.
+- [x] `set_timer` (moved from Phase 2, D15) + timers/alarms spoken through TTS; daily briefing command ("good morning": calendar, reminders, weather via web, top unread brain journal prompt).
 - [ ] Optional later: Gmail/Google Calendar via OAuth, behind the same `external` confirmation.
 
 **Done when:** "remind me to call mom at 7" creates a reminder after confirmation; "what's on today?" reads the calendar.

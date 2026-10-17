@@ -84,6 +84,10 @@ DEFAULTS: dict[str, Any] = {
         "daily_model_calls": 150,               # DJ spend cap per day
         "duck_level": 20,                       # music volume while Escanor talks/listens
     },
+    "assistant": {
+        "enabled": True,      # Apple Reminders/Calendar, Mac actions, timers, briefing
+        "city": "",           # for the weather in the morning briefing, e.g. "Bengaluru"
+    },
     "server": {
         "host": "127.0.0.1",
         "port": 8770,

