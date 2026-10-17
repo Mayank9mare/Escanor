@@ -20,7 +20,6 @@ dialog, spoken yes). No confirmer, or a "no", means the tool does not run
 and the model is told the user declined.
 """
 from __future__ import annotations
-import asyncio
 from ..core.session import Session
 from ..models.base import ToolCall
 from .base import EXTERNAL, ToolResult
@@ -52,7 +51,7 @@ class PermissionGate:
             if not approved:
                 return ToolResult(ok=False, output=DECLINED)
 
-        result = await asyncio.to_thread(tools.dispatch, call)
+        result = await tools.dispatch_async(call)
         if tool is not None and tool.untrusted_output and result.ok:
             result = ToolResult(ok=True, output=fence_untrusted(call.name, result.output), data=result.data)
         return result

@@ -13,8 +13,9 @@ request means fewer tokens on every call and better tool choice from
 small local models.
 """
 from __future__ import annotations
+import asyncio
 from ..models.base import ToolCall
-from .base import Tool, ToolResult
+from .base import AsyncTool, Tool, ToolResult
 
 CORE = "core"
 
@@ -58,12 +59,31 @@ class ToolRegistry:
         """Descriptions of the tools in enabled groups, for the model."""
         return [tool.to_schema() for tool in self._tools.values() if tool.group in self._enabled]
 
-    def dispatch(self, call: ToolCall) -> ToolResult:
+    def _refusal(self, call: ToolCall) -> ToolResult | None:
         tool = self._tools.get(call.name)
         if tool is None:
             return ToolResult(ok=False, output=f"Unknown tool: {call.name}")
         if tool.group not in self._enabled:
             return ToolResult(ok=False, output=f"{call.name} is in the '{tool.group}' group; call enable_tools first.")
+        return None
+
+    async def dispatch_async(self, call: ToolCall) -> ToolResult:
+        """Run a call from async code: AsyncTools on the loop, the rest on a thread."""
+        tool = self._tools.get(call.name)
+        if not isinstance(tool, AsyncTool) or self._refusal(call):
+            return await asyncio.to_thread(self.dispatch, call)
+        try:
+            return await tool.run_async(**call.arguments)
+        except TypeError as e:
+            return ToolResult(ok=False, output=f"Bad arguments for {call.name}: {e}")
+        except Exception as e:  # noqa: BLE001
+            return ToolResult(ok=False, output=f"{call.name} failed: {type(e).__name__}: {e}")
+
+    def dispatch(self, call: ToolCall) -> ToolResult:
+        refusal = self._refusal(call)
+        if refusal:
+            return refusal
+        tool = self._tools[call.name]
         try:
             return tool.run(**call.arguments)
         except TypeError as e:

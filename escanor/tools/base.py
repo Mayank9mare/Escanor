@@ -66,3 +66,15 @@ class Tool(ABC):
     def describe_call(self, arguments: dict) -> str:
         """One line shown to the user when asking to confirm this call."""
         return f"{self.name} {json.dumps(arguments, ensure_ascii=False)}"
+
+
+class AsyncTool(Tool):
+    """A tool whose work needs the event loop (e.g. starting the DJ's
+    background task). The registry awaits run_async() instead of running
+    run() on a worker thread."""
+
+    async def run_async(self, **kwargs) -> ToolResult:
+        raise NotImplementedError
+
+    def run(self, **kwargs) -> ToolResult:
+        raise RuntimeError(f"{self.name} is async; use ToolRegistry.dispatch_async")

@@ -47,7 +47,7 @@ class AllowAllGate:
     """Runs every tool without asking. Only for tests and tool-less use."""
 
     async def dispatch(self, call: ToolCall, tools: ToolRegistry, confirmer: Confirmer, session: Session) -> ToolResult:
-        return await asyncio.to_thread(tools.dispatch, call)
+        return await tools.dispatch_async(call)
 
 
 class DenyConfirmer:
