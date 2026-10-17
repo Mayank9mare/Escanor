@@ -15,7 +15,7 @@ what we're trading away. Newest at the bottom. Reversed decisions are marked **S
 | D5 | Build streaming-with-tools in Phase 1, not Phase 2 | Accepted | 2026-10-17 |
 | D6 | No `eager_input_streaming` on Claude tools | Accepted | 2026-10-17 |
 | D7 | Default Claude effort `low` | **Proposed** (your call) | 2026-10-17 |
-| D8 | GPT/Gemini default ids `gpt-5` / `gemini-3.6-flash` | **Proposed** (your call) | 2026-10-17 |
+| D8 | GPT/Gemini default ids `gpt-5` / `gemini-3.5-flash-lite` | Accepted (you, Gemini part) | 2026-10-17 |
 | D9 | No clock time in the system prompt | Accepted | 2026-10-17 |
 | D10 | Store each message as one JSON body in SQLite | Accepted | 2026-10-17 |
 | D11 | Ollama: hold back text that starts like a JSON tool call | Accepted | 2026-10-17 |
@@ -255,8 +255,8 @@ The `gpt` and `gemini` aliases need model ids. I can't check which ids your acco
 A. Change them in `~/.escanor/config.toml` under `[models.aliases]`.
 
 **Live note (2026-10-17):** `gemini-3.6-flash`'s free tier allows only 20 requests/day; one agent turn
-uses 2–4. `gemini-3.5-flash-lite` passed the remaining eval cases and has its own quota. Consider
-`gemini = "gemini:gemini-3.5-flash-lite"` if you stay on the free tier.
+uses 2–4. `gemini-3.5-flash-lite` passed the remaining eval cases and has its own quota. **Decision update (you, 2026-10-17):** the `gemini` alias now points to
+`gemini-3.5-flash-lite`. Use `/model gemini:gemini-3.6-flash` for the stronger model when you have quota.
 
 ---
 

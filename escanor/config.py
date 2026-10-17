@@ -43,7 +43,7 @@ DEFAULTS: dict[str, Any] = {
             "haiku": "anthropic:claude-haiku-5-5",
             "sonnet": "anthropic:claude-sonnet-5-5",
             "gpt": "openai:gpt-5",
-            "gemini": "gemini:gemini-3.6-flash",
+            "gemini": "gemini:gemini-3.5-flash-lite",
             "local": "ollama:qwen3:8b",
             "mock": "mock:mock-model",
         },
