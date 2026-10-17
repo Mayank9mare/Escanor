@@ -1,7 +1,7 @@
 # Escanor core — Flow
 
 How the core works at runtime: where execution starts, every function on the path, every way a
-turn can end, and the low-level design underneath. Last synced: 2026-10-17, Phase 6 complete.
+turn can end, and the low-level design underneath. Last synced: 2026-10-17, Phase 7 complete.
 
 ## 1. In one paragraph
 
@@ -49,6 +49,7 @@ flowchart LR
 | E11 | DJ background task | [DJ._loop](../../escanor/music/dj.py) every 2 s | started by `dj_start` | runs inside `serve` / `listen` / chat |
 | E12 | `escanor brief` / "good morning" | `morning_briefing` tool → [Briefing.build](../../escanor/assistant/briefing.py) | — | calendar, reminders, timers, weather, journal |
 | E13 | A timer fires | [TimerService._fire](../../escanor/assistant/timers.py) | — | notification + speech (TIMER priority) + CLI print |
+| E14 | "explain this paper <link>" | `enable_tools(research)` → `research_ingest` → `use_skill(learn-anything)` → `research_read` parts | allowed folders for files (D36) | log saved to research/learn/ |
 | E9 | `escanor brain reindex|stats` | [cli.main](../../escanor/cli.py) | — | maintenance |
 | E6 | `/new`, `/skills`, `/tools`, `/models` | [handle_command](../../escanor/cli.py#L130) | — | `/new` also turns extra tool groups off |
 
@@ -178,6 +179,9 @@ stateDiagram-v2
 | [assistant/apple.py](../../escanor/assistant/apple.py) | Reminders, Calendar, notify, open app/url, clipboard (9 tools, group `assistant`) | osa |
 | [assistant/timers.py](../../escanor/assistant/timers.py) | Timers + announcers | asyncio |
 | [assistant/briefing.py](../../escanor/assistant/briefing.py) | Morning briefing sources | apple, timers, vault, web |
+| [research/ingest.py](../../escanor/research/ingest.py) | arXiv / link / local file → text → research/<slug>/source.md | web.py checks, pypdf |
+| [research/reviews.py](../../escanor/research/reviews.py) | learn-anything logs → reviews due | vault |
+| [research/tools.py](../../escanor/research/tools.py) | research_ingest, research_read, research_reviews (group `research`) | the above |
 | [server/](../../escanor/server/) | FastAPI app, WebSocket protocol, static UI | fastapi, uvicorn[standard] |
 | [models/](../../escanor/models/) | Provider-neutral `Model` + four providers + mock | SDKs / urllib |
 
@@ -248,5 +252,6 @@ flowchart TD
 | `[music] dj_model / patter_every` | `haiku` / `2` | who picks and talks; intro every Nth track |
 | `[music] daily_model_calls / duck_level` | `150` / `20` | DJ spend cap; music volume while talking |
 | `[assistant] enabled / city` | `true` / `""` | Apple tools + timers + briefing; city for weather |
+| `[research] allowed_dirs` | Downloads, Documents, Desktop | local files research_ingest may read |
 | `[server] host / port` | `127.0.0.1` / `8770` | web UI address (D26) |
 | `ESCANOR_HOME` | `~/.escanor` | data directory |

@@ -27,6 +27,12 @@ themselves (preferences, people, routines), save it with remember_fact. To write
 "brain" tool group."""
 
 
+def is_external_copy(path: str) -> bool:
+    """Saved copies of outside documents (research/<slug>/source.md) keep
+    their untrusted status inside the brain."""
+    return path.startswith("research/") and path.endswith("/source.md")
+
+
 def _snippet(text: str, limit: int = 400) -> str:
     text = " ".join(text.split())
     return text if len(text) <= limit else text[:limit] + "..."
@@ -56,7 +62,11 @@ class BrainSearchTool(Tool):
         for hit in hits:
             where = hit.path if hit.source == "brain" else f"{hit.source}:{hit.path}"
             block = f"[{where} § {hit.heading}]\n{_snippet(hit.text)}"
-            blocks.append(block if hit.source == "brain" else fence_untrusted(f"notes:{hit.source}", block))
+            if hit.source != "brain":
+                block = fence_untrusted(f"notes:{hit.source}", block)
+            elif is_external_copy(hit.path):
+                block = fence_untrusted(hit.path, block)
+            blocks.append(block)
         return ToolResult(ok=True, output="\n\n".join(blocks))
 
 
@@ -75,9 +85,11 @@ class BrainReadTool(Tool):
 
     def run(self, path: str) -> ToolResult:
         try:
-            return ToolResult(ok=True, output=self._vault.read(path))
+            text = self._vault.read(path)
         except VaultError as e:
             return ToolResult(ok=False, output=str(e))
+        relative = self._vault.relative(self._vault.resolve(path))
+        return ToolResult(ok=True, output=fence_untrusted(relative, text) if is_external_copy(relative) else text)
 
 
 class RememberFactTool(Tool):

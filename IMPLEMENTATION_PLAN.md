@@ -323,10 +323,10 @@ Prove the three risky external pieces before building on them.
 **Done when:** "remind me to call mom at 7" creates a reminder after confirmation; "what's on today?" reads the calendar.
 **Tests:** AppleScript builders produce correct scripts (subprocess mocked); permissions enforced.
 
-### Phase 7 — Research explainer (1–2 days)
-- [ ] `research` flow: given a URL/PDF/arXiv id → `web_fetch` / PDF text extraction (pypdf) → saved to `brain/research/<slug>/source.md` → `use_skill("learn-anything")` drives the explanation.
-- [ ] Learning log stored at `brain/research/learn/<topic>.md` (learn-anything's template), so it is also searchable second-brain content.
-- [ ] Spaced review: on startup / morning briefing, list topics whose review date in the log is due; "quiz me" resumes.
+### Phase 7 — Research explainer (1–2 days) ✅ done 2026-10-17
+- [x] `research` flow: given a URL/PDF/arXiv id → `web_fetch` / PDF text extraction (pypdf) → saved to `brain/research/<slug>/source.md` → `use_skill("learn-anything")` drives the explanation.
+- [x] Learning log stored at `brain/research/learn/<topic>.md` (learn-anything's template), so it is also searchable second-brain content.
+- [x] Spaced review: on startup / morning briefing, list topics whose review date in the log is due; "quiz me" resumes.
 
 **Done when:** "explain this paper <arXiv link>" → plain-language walkthrough with checks for understanding, and a log appears in the brain.
 **Tests:** source ingestion on fixture HTML/PDF; due-review detection from fixture logs.

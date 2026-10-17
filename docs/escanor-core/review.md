@@ -1,7 +1,7 @@
 # Escanor core — Review Guide
 
-**Branch:** `main` · **Scope:** Phases 1–6 (core, tools, web, skills, brain, voice, DJ, reminders/calendar/timers) ·
-**Tests:** 200 passing · **Updated:** 2026-10-17
+**Branch:** `main` · **Scope:** Phases 1–7 (core, tools, web, skills, brain, voice, DJ, assistant, research) ·
+**Tests:** 215 passing · **Updated:** 2026-10-17
 
 ## TL;DR (read this first)
 
@@ -52,8 +52,10 @@ Read in this order: it follows a message from the model interface up to the term
 | 29 ⭐ | [assistant/osa.py](../../escanor/assistant/osa.py) | Runs AppleScript safely | `quote()` on every model value; `date_expr` day-1 trick | 80 |
 | 30 | [assistant/apple.py](../../escanor/assistant/apple.py) | Reminders, Calendar, Mac actions | which tools are `external` ([D32](decision.md#d32-open_url-asks-first-clipboard-text-is-untrusted)) | 300 |
 | 31 | [assistant/timers.py](../../escanor/assistant/timers.py), [briefing.py](../../escanor/assistant/briefing.py) | Timers, morning briefing | a failing announcer/source doesn't stop the others | 220 |
-| 32 | [cli.py](../../escanor/cli.py) | Terminal chat | `StdinLines` ([B8](bugs.md)); Ctrl-C cancels only the turn | 270 |
-| 33 | [tests/](../../tests/) | 200 offline tests | error paths, not just happy paths | — |
+| 32 | [research/ingest.py](../../escanor/research/ingest.py) | Papers and articles into the brain | local-file allowlist; arXiv title | 170 |
+| 33 | [research/reviews.py](../../escanor/research/reviews.py), [research/tools.py](../../escanor/research/tools.py) | Reviews due; research tools | sources fenced everywhere ([D35](decision.md#d35-ingested-sources-stay-untrusted-inside-the-brain)) | 200 |
+| 34 | [cli.py](../../escanor/cli.py) | Terminal chat | `StdinLines` ([B8](bugs.md)); Ctrl-C cancels only the turn | 270 |
+| 35 | [tests/](../../tests/) | 215 offline tests | error paths, not just happy paths | — |
 
 Skip or skim: [telemetry.py](../../escanor/telemetry.py) (copied, path renamed),
 [assistant/web_search.py](../../escanor/assistant/web_search.py) (copied DuckDuckGo scraper).

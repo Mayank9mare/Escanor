@@ -88,6 +88,11 @@ DEFAULTS: dict[str, Any] = {
         "enabled": True,      # Apple Reminders/Calendar, Mac actions, timers, briefing
         "city": "",           # for the weather in the morning briefing, e.g. "Bengaluru"
     },
+    "research": {
+        "enabled": True,
+        # Local files research_ingest may read (the model chooses the path).
+        "allowed_dirs": ["~/Downloads", "~/Documents", "~/Desktop"],
+    },
     "server": {
         "host": "127.0.0.1",
         "port": 8770,

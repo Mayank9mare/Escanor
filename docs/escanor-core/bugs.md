@@ -20,6 +20,7 @@ Fixed bugs stay here (struck through) as an audit trail. IDs never get reused.
 | ~~B11~~ | ~~MEDIUM~~ | ~~Speech chunker split sentences inside code blocks~~ | ✅ FIXED | Phase 4 · test | Phase 4 |
 | ~~B12~~ | ~~HIGH~~ | ~~`escanor serve` rejected every WebSocket connection~~ | ✅ FIXED | Phase 4 · test | Phase 4 |
 | ~~B13~~ | ~~HIGH~~ | ~~No WebSocket support in plain uvicorn~~ | ✅ FIXED | Phase 4 · live browser check | Phase 4 |
+| ~~B14~~ | ~~LOW~~ | ~~arXiv papers saved under their licence notice instead of their title~~ | ✅ FIXED | Phase 7 · live ingest | Phase 7 |
 
 Severity: **HIGH** = data loss, wrong result, security, blocks testing/release · **MEDIUM** =
 breaks an edge case or error path · **LOW** = minor or cosmetic.
@@ -128,6 +129,13 @@ breaks an edge case or error path · **LOW** = minor or cosmetic.
 - **Root cause:** `uvicorn` without extras has no WebSocket library ("Unsupported upgrade request");
   the FastAPI test client bypasses uvicorn, so tests couldn't see it.
 - **Fix:** depend on `uvicorn[standard]` ([pyproject.toml](../../pyproject.toml)). Verified live: message → streamed reply in the page.
+
+### ~~B14. arXiv papers saved under their licence notice instead of their title~~
+
+- **Severity:** LOW · **Found:** Phase 7, live ingest of 1706.03762 · **Fixed:** Phase 7
+- **Root cause:** the PDF has no title metadata and its first text line is Google's reproduction notice.
+- **Fix:** take the title from arXiv's metadata API ([ingest.py `arxiv_title`](../../escanor/research/ingest.py)); verified live → "Attention Is All You Need".
+- **Regression test:** [test_should_fetch_arxiv_pdf_and_title_from_metadata](../../tests/test_research.py)
 
 ---
 

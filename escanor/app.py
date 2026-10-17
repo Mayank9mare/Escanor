@@ -30,6 +30,7 @@ GROUP_DESCRIPTIONS = {
     "brain": "write, append to and list notes in the second brain; forget facts",
     "music": "play, queue and control YouTube Music; DJ mode with spoken intros",
     "assistant": "Apple Reminders and Calendar, opening apps/links, notifications, clipboard, timers",
+    "research": "save and read papers/articles (arXiv, links, PDFs); learning reviews due",
 }
 
 
@@ -104,7 +105,29 @@ def build_app(settings: dict, model: Model, model_spec: str) -> Escanor:
         install_music(escanor)
     if settings["assistant"]["enabled"]:
         install_assistant(escanor)
+    if settings["research"]["enabled"]:
+        install_research(escanor)
     return escanor
+
+
+def install_research(escanor: Escanor) -> None:
+    """Paper/article ingestion, paged reading, and spaced-review reminders
+    (also added to the morning briefing when the assistant is installed)."""
+    from datetime import date
+    from .research.ingest import Ingestor
+    from .research.reviews import describe, due_reviews
+    from .research.tools import RESEARCH_GUIDANCE, research_tools
+
+    settings = escanor.settings
+    ingestor = Ingestor(escanor.vault, [Path(d) for d in settings["research"]["allowed_dirs"]],
+                        allow_private=settings["web"]["allow_private_hosts"])
+    for tool in research_tools(ingestor, escanor.vault):
+        escanor.agent.tools.add(tool)
+    escanor.agent.prompts.add_section(lambda: RESEARCH_GUIDANCE)
+    briefing = escanor.services.get("briefing")
+    if briefing is not None:
+        briefing.add("Learning reviews due", lambda: describe(due_reviews(escanor.vault, date.today()), date.today()))
+    escanor.services["ingestor"] = ingestor
 
 
 def install_assistant(escanor: Escanor) -> None:

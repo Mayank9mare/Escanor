@@ -42,6 +42,9 @@ what we're trading away. Newest at the bottom. Reversed decisions are marked **S
 | D32 | `open_url` asks first; clipboard text is untrusted | Accepted | 2026-10-17 |
 | D33 | Timers live in the running process | Accepted | 2026-10-17 |
 | D34 | The morning briefing is a tool the model summarises | Accepted | 2026-10-17 |
+| D35 | Ingested sources stay untrusted inside the brain | Accepted | 2026-10-17 |
+| D36 | Local files only from allowed folders | Accepted | 2026-10-17 |
+| D37 | Explaining is learn-anything's job; Escanor supplies ingest, paging, reviews | Accepted | 2026-10-17 |
 
 ---
 
@@ -749,3 +752,50 @@ A ([timers.py](../../escanor/assistant/timers.py)). The tool description steers 
 
 ### Decision
 A ([briefing.py](../../escanor/assistant/briefing.py)). Each source fails independently.
+
+---
+
+## D35. Ingested sources stay untrusted inside the brain
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 7
+
+### Context
+Papers and articles are saved to `research/<slug>/source.md` so they're searchable. Your own notes are
+trusted (D18), so a saved web page would otherwise "launder" into trusted text on its next read.
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. Treat `research/*/source.md` as external copies: fenced by `brain_read`, `brain_search` and `research_read`** | Searchable and safe | A path convention to remember |
+| B. Store sources outside the vault | Clear separation | Not searchable with your notes |
+
+### Decision
+A ([brain/tools.py `is_external_copy`](../../escanor/brain/tools.py)).
+
+---
+
+## D36. Local files only from allowed folders
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 7
+
+The model picks the path for `research_ingest`, so it may only read PDF/Markdown/text/HTML files in
+`[research] allowed_dirs` (default Downloads, Documents, Desktop). `..` tricks are resolved before checking.
+Alternatives: any path (would expose `~/.ssh`), or a confirmation per file (tedious for "explain the PDF I
+just downloaded").
+
+---
+
+## D37. Explaining is learn-anything's job; Escanor supplies ingest, paging and reviews
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 7
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. Tools fetch/save/page/track reviews; the `learn-anything` skill does the teaching** | Reuses your skill as-is; its log lands in the brain | Depends on the model following a long skill |
+| B. A built-in "explain" pipeline (summary → sections → quiz) | Predictable | Duplicates the skill; less Socratic |
+
+### Decision
+A. arXiv titles come from arXiv's metadata API (the PDF's first line is often a licence notice, B14).
