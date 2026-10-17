@@ -12,8 +12,16 @@ import asyncio
 import sys
 from ..app import Escanor
 from ..core.session import SessionStore
+from .audio_out import DJ as DJ_PRIORITY
 from .audio_out import AfplayPlayer, AudioOut, NullPlayer
 from .speech import SpeechEngine
+
+
+def attach_dj_voice(app: Escanor, audio: AudioOut) -> None:
+    """Give the DJ the speaker, at the lowest priority."""
+    dj = app.services.get("dj")
+    if dj is not None:
+        dj.say = lambda text: audio.say(text, DJ_PRIORITY)
 
 
 def build_speech(settings: dict) -> SpeechEngine:
@@ -33,6 +41,7 @@ def serve(app: Escanor, store: SessionStore, speech: SpeechEngine | None, mute: 
         if speech is not None:
             audio = AudioOut(speech.synthesize, NullPlayer() if mute else AfplayPlayer(),
                              ducker=app.services.get("ducker"))
+            attach_dj_voice(app, audio)
         web = create_server(app, store, speech, audio)
         host, port = app.settings["server"]["host"], int(app.settings["server"]["port"])
         print(f"Escanor is at http://{host}:{port}  (Ctrl-C to stop)")
@@ -52,6 +61,7 @@ def listen(app: Escanor, store: SessionStore, speech: SpeechEngine, use_enter: b
 
     async def main() -> None:
         audio = AudioOut(speech.synthesize, AfplayPlayer(), ducker=app.services.get("ducker"))
+        attach_dj_voice(app, audio)
         frames = MicFrames()
         wake = None
         if not use_enter:

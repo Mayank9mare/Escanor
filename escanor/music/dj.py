@@ -85,7 +85,8 @@ def _json_object(text: str) -> dict:
 class DJ:
     def __init__(self, player: YouTubeMusicPlayer, library: MusicLibrary, model: Model | None,
                  guard: SpendGuard, say: Callable[[str], "asyncio.Future | None"] | None = None,
-                 patter_every: int = 2, lookahead: float = 20.0, poll_seconds: float = 2.0):
+                 patter_every: int = 2, lookahead: float = 20.0, poll_seconds: float = 2.0,
+                 run_loop: bool = True):
         self.player = player
         self.library = library
         self.model = model
@@ -94,6 +95,7 @@ class DJ:
         self.patter_every = max(1, patter_every)
         self.lookahead = lookahead
         self.poll_seconds = poll_seconds
+        self.run_loop = run_loop          # False in tests, which call tick() themselves
         self.state = DJState()
         self._task: asyncio.Task | None = None
 
@@ -115,7 +117,7 @@ class DJ:
         else:
             self.state.played.append(current.video_id)
             started = f"Keeping {current.title} by {current.artist} and taking it from there."
-        if self._task is None or self._task.done():
+        if self.run_loop and (self._task is None or self._task.done()):
             self._task = asyncio.get_running_loop().create_task(self._loop())
         return f"DJ mode on for '{self.state.mood}'. {started}"
 

@@ -303,13 +303,13 @@ Prove the three risky external pieces before building on them.
 **Done when:** time from end of speech to first audio < ~1.5 s on Haiku + faster-whisper small + Piper; you can interrupt it mid-sentence.
 **Tests:** chunker cases; WebSocket protocol with mock STT/TTS/model; cancel aborts generation.
 
-### Phase 5 — AI DJ on YouTube Music (2–3 days)
-- [ ] `music/player.py`: typed client for th-ch API Server (play, pause, next, previous, song, queue get/add/clear, search, volume get/set, like). Clear error when the app isn't running ("open YouTube Music desktop").
-- [ ] `music/library.py`: ytmusicapi (history, liked, search songs, `get_watch_playlist` for radio continuation); cache results 10 min.
-- [ ] `music/tools.py`: thin tools over both; `music_play("something upbeat for coding")` = model chooses query → search → queue → play.
-- [ ] `music/dj.py`: background asyncio task polling `/song` every 2 s. ~20 s before a track ends: pick the next 1–3 tracks from history/likes/radio matching the session mood and queue them; pre-generate a ≤25-word intro with a cheap model call (track, artist, one fact from metadata/web, optional time/weather) and **pre-synthesize** it. At the boundary, v1 = **pause → speak → play** (reliable, no talking over vocals); v2 = radio-style volume duck over the intro. Rate-limit patter (every 2–3 tracks, configurable). Patter goes through `audio_out` at the lowest priority; a conversation always wins.
-- [ ] Spend guard: count DJ model calls per hour and enforce a daily cap from config, since DJ mode runs unattended (the general cost dashboard stays in Phase 8).
-- [ ] Voice commands: "Escanor, DJ mode, chill evening vibe", "skip", "who is this?", "more like this", "stop the DJ".
+### Phase 5 — AI DJ on YouTube Music (2–3 days) ✅ done 2026-10-17 (live app: [YOU])
+- [x] `music/player.py`: typed client for th-ch API Server (play, pause, next, previous, song, queue get/add/clear, search, volume get/set, like). Clear error when the app isn't running ("open YouTube Music desktop").
+- [x] `music/library.py`: ytmusicapi (history, liked, search songs, `get_watch_playlist` for radio continuation); cache results 10 min.
+- [x] `music/tools.py`: thin tools over both; `music_play("something upbeat for coding")` = model chooses query → search → queue → play.
+- [x] `music/dj.py`: background asyncio task polling `/song` every 2 s. ~20 s before a track ends: pick the next 1–3 tracks from history/likes/radio matching the session mood and queue them; pre-generate a ≤25-word intro with a cheap model call (track, artist, one fact from metadata/web, optional time/weather) and **pre-synthesize** it. At the boundary, v1 = **pause → speak → play** (reliable, no talking over vocals); v2 = radio-style volume duck over the intro. Rate-limit patter (every 2–3 tracks, configurable). Patter goes through `audio_out` at the lowest priority; a conversation always wins.
+- [x] Spend guard: count DJ model calls per hour and enforce a daily cap from config, since DJ mode runs unattended (the general cost dashboard stays in Phase 8).
+- [x] Voice commands: "Escanor, DJ mode, chill evening vibe", "skip", "who is this?", "more like this", "stop the DJ".
 
 **Done when:** a 30-minute DJ session runs unattended with sensible picks and intros that don't talk over vocals at full volume.
 **Tests:** fake th-ch server (FastAPI in tests/fakes) for player + DJ state machine; ducking restores volume even when TTS fails.

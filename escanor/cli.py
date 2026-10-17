@@ -24,6 +24,7 @@ import json
 import os
 import signal
 import sys
+from pathlib import Path
 from . import config
 from .app import Escanor, build_app, build_model
 from .core.events import Error, ModelSwitched, TextDelta, ToolFinished, ToolStarted, TurnDone
@@ -239,6 +240,44 @@ class Repl:
             await self.run_turn_interruptible(line)
 
 
+def music_command(app: Escanor, action: str) -> int:
+    from .music.player import PlayerNotAuthorized, PlayerUnavailable
+    player, library = app.services.get("player"), app.services.get("library")
+    if player is None:
+        print("Music is disabled ([music] enabled = false).")
+        return 1
+    if action == "status":
+        try:
+            song = player.song()
+            print(f"Player: connected. {song.describe() if song else 'Nothing playing.'}")
+        except (PlayerUnavailable, PlayerNotAuthorized) as e:
+            print(f"Player: {e}")
+        print(f"Library: {'signed in' if library.has_account else 'search only (no history/likes)'} ({library.auth_path})")
+        return 0
+
+    print("1/2  Connecting to the YouTube Music app. Click 'Allow' in the dialog it shows…")
+    try:
+        player.authorize()
+        print("     Connected.")
+    except (PlayerUnavailable, PlayerNotAuthorized, RuntimeError) as e:
+        print(f"     {e}")
+    print("2/2  Optional: sign in for your history and liked songs (used by the DJ).")
+    print("     In your browser, open music.youtube.com signed in, open DevTools → Network, click any")
+    print("     request to 'browse', copy its request headers, and paste them below (Ctrl-D to finish).")
+    print("     Skip with Ctrl-C. These cookies expire after days to weeks; re-run this when they do.")
+    import shutil
+    import subprocess
+    tool = shutil.which("ytmusicapi") or str(Path(sys.executable).with_name("ytmusicapi"))
+    try:
+        subprocess.run([tool, "browser", "--file", str(library.auth_path)], check=False)
+    except (KeyboardInterrupt, OSError) as e:
+        print(f"     Skipped ({e.__class__.__name__}).")
+    if library.auth_path.exists():
+        library.auth_path.chmod(0o600)
+        print(f"     Saved to {library.auth_path}.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="escanor", description="Escanor, your local assistant.")
     parser.add_argument("--model", help="alias or provider:model-id (default from config: haiku)")
@@ -253,6 +292,8 @@ def main(argv: list[str] | None = None) -> int:
     listen_cmd.add_argument("--enter", action="store_true", help="press Enter instead of saying the wake word")
     brain_cmd = sub.add_parser("brain", help="second brain maintenance")
     brain_cmd.add_argument("action", choices=["reindex", "stats"])
+    music_cmd = sub.add_parser("music", help="connect YouTube Music")
+    music_cmd.add_argument("action", choices=["connect", "status"])
     args = parser.parse_args(argv)
 
     config.load_dotenv()
@@ -274,6 +315,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{app.vault.root}: {stats['files']} notes, {stats['chunks']} chunks, {stats['embedded']} embedded "
               f"({app.index.embedder.name}); re-indexed {counts['changed']}, removed {counts['removed']}")
         return 0
+
+    if args.command == "music":
+        return music_command(app, args.action)
 
     if args.command in ("serve", "listen"):
         from .voice import runtime

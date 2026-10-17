@@ -76,6 +76,14 @@ DEFAULTS: dict[str, Any] = {
         # "headphones": interrupt it by talking (needs headphones; see listen.py).
         "barge_in": "off",
     },
+    "music": {
+        "enabled": True,
+        "api_url": "http://127.0.0.1:26538",   # YouTube Music app's API Server plugin
+        "dj_model": "haiku",                    # picks tracks + writes intros
+        "patter_every": 2,                      # introduce every Nth track
+        "daily_model_calls": 150,               # DJ spend cap per day
+        "duck_level": 20,                       # music volume while Escanor talks/listens
+    },
     "server": {
         "host": "127.0.0.1",
         "port": 8770,

@@ -34,6 +34,10 @@ what we're trading away. Newest at the bottom. Reversed decisions are marked **S
 | D24 | Barge-in: always by mic/new message in the web UI; by voice only with headphones | Accepted | 2026-10-17 |
 | D25 | Kokoro TTS deferred | Accepted | 2026-10-17 |
 | D26 | Web UI on port 8770 (8765 is TradeMare's) | Accepted | 2026-10-17 |
+| D27 | Music tools are `write`, not `external` (no "Allow?" per skip) | Accepted | 2026-10-17 |
+| D28 | Search via ytmusicapi, playback via the desktop app | Accepted | 2026-10-17 |
+| D29 | DJ v1: pause → speak → play; model picks from radio + likes | Accepted | 2026-10-17 |
+| D30 | ytmusicapi browser-cookie login (not OAuth) | Accepted | 2026-10-17 |
 
 ---
 
@@ -591,3 +595,81 @@ A. Add it as another `TTSEngine` when you want to compare voices (open question 
 
 Your TradeMare web server already listens on 8765. Escanor defaults to 8770; change it with
 `[server] port` or `escanor serve --port`.
+
+---
+
+## D27. Music tools are `write`, not `external`
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 5
+
+### Context
+The plan's permission table says "controlling apps" is `external` (always confirm). Applied to music,
+"skip this" would need an "Allow?" every time.
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. `write`: run without asking** | A usable DJ and voice remote | A prompt-injected page could change your song (annoying, harmless, reversible) |
+| B. `external` | Strictest | Unusable by voice |
+
+### Decision
+A ([music/tools.py](../../escanor/music/tools.py)). External stays for anything that leaves your Mac or can't be undone.
+
+---
+
+## D28. Search via ytmusicapi, playback via the desktop app
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 5
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. ytmusicapi for search/radio/history; th-ch app API for play/queue/volume** | Clean search results (videoId, title, artists, album); playback in your real Premium session | Two unofficial dependencies |
+| B. th-ch `POST /search` only | One dependency | Returns YouTube's raw internal response; no history/likes |
+| C. Stream audio ourselves (yt-dlp) | No app needed | Bypasses the official client; ToS risk; no Premium features |
+
+### Decision
+A. Verified live: ytmusicapi search and radio work without signing in.
+
+---
+
+## D29. DJ v1: pause → speak → play; the model picks from radio + likes
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 5
+
+### Context
+The plan's v1 DJ never talks over vocals. The next track has to come from somewhere sensible.
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. ~20 s before the end, the model picks from YouTube Music's radio for the current song + your likes (no repeats), queues it "up next" and writes an intro; when it starts: pause, speak, play** | Reliable; YouTube's own recommendations as raw material; one cheap call per pick | A 2–4 s pause per introduced track |
+| B. Radio-style talk-over with volume ducking | Smoother | Timing is fragile; talks over vocals |
+| C. Let YouTube Music's autoplay choose | No model calls | No mood steering, nothing to introduce |
+
+### Decision
+A ([music/dj.py](../../escanor/music/dj.py)). Past the daily cap (`[music] daily_model_calls`) it keeps
+choosing (first unplayed candidate) but stops talking. B remains the v2 item in the plan.
+
+---
+
+## D30. ytmusicapi browser-cookie login, not OAuth
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 5
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. `ytmusicapi browser` (paste request headers once)** | No Google Cloud project | ytmusicapi marks it deprecated; cookies expire after days to weeks |
+| B. `ytmusicapi oauth` | Longer-lived | Needs your own Google Cloud OAuth client id/secret |
+
+### Decision
+A, guided by `escanor music connect`. History and likes are optional: without them the DJ uses radio only,
+and expiry shows up as a note instead of an error.
+
+### Revisit if
+Re-pasting headers gets tedious → set up B.

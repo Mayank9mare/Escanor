@@ -1,7 +1,7 @@
 # Escanor core — Review Guide
 
-**Branch:** `main` · **Scope:** Phases 1–4 (core, tools, web, skills, second brain, voice + web UI) ·
-**Tests:** 160 passing · **Updated:** 2026-10-17
+**Branch:** `main` · **Scope:** Phases 1–5 (core, tools, web, skills, second brain, voice + web UI, YouTube Music DJ) ·
+**Tests:** 180 passing · **Updated:** 2026-10-17
 
 ## TL;DR (read this first)
 
@@ -45,8 +45,12 @@ Read in this order: it follows a message from the model interface up to the term
 | 22 | [voice/listen.py](../../escanor/voice/listen.py) | Hands-free loop | end-of-speech timing; mic drained after speaking | 260 |
 | 23 ⭐ | [server/app.py](../../escanor/server/app.py) | Web UI backend | new message cancels the running turn; confirm futures; 127.0.0.1 only | 240 |
 | 24 | [server/static/](../../escanor/server/static/) | The page | push-to-talk WAV encoding; dialog | 300 |
-| 25 | [cli.py](../../escanor/cli.py) | Terminal chat | `StdinLines` ([B8](bugs.md)); Ctrl-C cancels only the turn | 270 |
-| 26 | [tests/](../../tests/) | 160 offline tests | error paths, not just happy paths | — |
+| 25 | [music/player.py](../../escanor/music/player.py) | Presses YouTube Music's buttons | token file 0600; 401 → reconnect message | 190 |
+| 26 | [music/library.py](../../escanor/music/library.py) | Finds songs | expired cookies → note, not crash | 140 |
+| 27 ⭐ | [music/dj.py](../../escanor/music/dj.py) | The DJ | play resumes in `finally`; spend cap; no repeats ([D29](decision.md#d29-dj-v1-pause--speak--play-the-model-picks-from-radio--likes)) | 250 |
+| 28 | [music/tools.py](../../escanor/music/tools.py) | Music tools | `write` level ([D27](decision.md#d27-music-tools-are-write-not-external)) | 160 |
+| 29 | [cli.py](../../escanor/cli.py) | Terminal chat | `StdinLines` ([B8](bugs.md)); Ctrl-C cancels only the turn | 270 |
+| 30 | [tests/](../../tests/) | 180 offline tests | error paths, not just happy paths | — |
 
 Skip or skim: [telemetry.py](../../escanor/telemetry.py) (copied, path renamed),
 [assistant/web_search.py](../../escanor/assistant/web_search.py) (copied DuckDuckGo scraper).
@@ -113,6 +117,13 @@ down while anything is said and turned back up after, even if something crashes.
 Escanor is busy interrupts it first.
 
 - [ ] **QUESTION** speech plays on the Mac even when you use the page from your phone unless you open it with `?speech=browser`. OK as the default?
+
+### 27. [dj.py](../../escanor/music/dj.py) ⭐
+
+**In simple words:** watches what's playing; near the end of a song it picks the next one for your mood
+and, every couple of songs, introduces it: pause, speak, play.
+
+- [ ] **VERIFY** after `escanor music connect`: `escanor serve`, say "DJ mode, chill evening", let two songs pass.
 
 ## Things to decide together
 

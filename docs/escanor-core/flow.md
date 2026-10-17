@@ -1,7 +1,7 @@
 # Escanor core — Flow
 
 How the core works at runtime: where execution starts, every function on the path, every way a
-turn can end, and the low-level design underneath. Last synced: 2026-10-17, Phase 4 complete.
+turn can end, and the low-level design underneath. Last synced: 2026-10-17, Phase 5 complete.
 
 ## 1. In one paragraph
 
@@ -45,6 +45,8 @@ flowchart LR
 | E5 | Ctrl-C during a reply | SIGINT → `task.cancel()` | only while a turn runs | at the prompt, Ctrl-C exits |
 | E7 | `escanor serve` → browser at :8770 | [voice/runtime.serve](../../escanor/voice/runtime.py) → [server/app.create_server](../../escanor/server/app.py) | binds 127.0.0.1 only | WebSocket per tab; push-to-talk, confirm dialog |
 | E8 | `escanor listen` | [voice/runtime.listen](../../escanor/voice/runtime.py) → [ListenLoop](../../escanor/voice/listen.py) | mic permission | wake word (or Enter) → speak → answer aloud |
+| E10 | `escanor music connect|status` | [cli.music_command](../../escanor/cli.py) | — | app token (click Allow) + optional ytmusicapi login |
+| E11 | DJ background task | [DJ._loop](../../escanor/music/dj.py) every 2 s | started by `dj_start` | runs inside `serve` / `listen` / chat |
 | E9 | `escanor brain reindex|stats` | [cli.main](../../escanor/cli.py) | — | maintenance |
 | E6 | `/new`, `/skills`, `/tools`, `/models` | [handle_command](../../escanor/cli.py#L130) | — | `/new` also turns extra tool groups off |
 
@@ -101,6 +103,24 @@ sequenceDiagram
    3. [AudioOut._run](../../escanor/voice/audio_out.py): highest priority first; ducks music; `afplay`; restores music when the queue drains (in `finally`)
 2. Confirmations: [WebConfirmer](../../escanor/server/app.py) shows a dialog and says the question at `CONFIRM` priority; in `listen`, [VoiceConfirmer](../../escanor/voice/conversation.py) asks aloud and accepts only a clear yes ([is_yes](../../escanor/voice/conversation.py)).
 
+### E11 — DJ mode
+
+```mermaid
+stateDiagram-v2
+  [*] --> Playing: dj_start(mood)
+  Playing --> Preparing: < 20 s left and nothing queued
+  Preparing --> Playing: model picks from radio + likes → enqueue up next (+ intro every Nth)
+  Playing --> Introducing: our track starts and has an intro
+  Introducing --> Playing: pause → AudioOut.say(intro, DJ) → play (play runs in finally)
+  Playing --> [*]: dj_stop
+```
+
+- [DJ.tick](../../escanor/music/dj.py): `player.song()` → new track? → `_on_new_track`; near the end → `_prepare_next`
+- [_candidates](../../escanor/music/dj.py): [MusicLibrary.radio](../../escanor/music/library.py) + `liked()`, minus played
+- [_choose](../../escanor/music/dj.py) / [_write_intro](../../escanor/music/dj.py): each a `SpendGuard.allow()`-gated model call
+- Patter is `AudioOut` priority `DJ`: any reply or confirmation cuts it off; the music resumes regardless.
+- While Escanor talks or listens, [PlayerDucker](../../escanor/music/player.py) lowers the app volume to `duck_level` and restores it.
+
 ### Tool internals
 
 - [WebFetchTool.run](../../escanor/assistant/web.py#L188) → [fetch_text](../../escanor/assistant/web.py#L130) → [check_url](../../escanor/assistant/web.py#L49) (scheme, resolve, refuse non-global) → urllib with [_CheckingRedirects](../../escanor/assistant/web.py#L68) → HTML to text → page of 12k chars with a `start=` hint
@@ -148,6 +168,10 @@ sequenceDiagram
 | [voice/audio_out.py](../../escanor/voice/audio_out.py) | The only speaker owner: priority, pipelining, ducking, interrupt | afplay |
 | [voice/conversation.py](../../escanor/voice/conversation.py) | `speak_turn`, `VoiceConfirmer` | agent, AudioOut |
 | [voice/listen.py](../../escanor/voice/listen.py) | Wake word, energy VAD, utterance recording, `ListenLoop` | sounddevice, openWakeWord (optional) |
+| [music/player.py](../../escanor/music/player.py) | YouTube Music app client (token, play, queue, volume) + `PlayerDucker` | th-ch API Server |
+| [music/library.py](../../escanor/music/library.py) | search, radio, history, likes (cached 10 min) | ytmusicapi |
+| [music/dj.py](../../escanor/music/dj.py) | DJ loop, picking, intros, `SpendGuard` | player, library, model, AudioOut |
+| [music/tools.py](../../escanor/music/tools.py) | 7 music tools (group `music`) | the above |
 | [server/](../../escanor/server/) | FastAPI app, WebSocket protocol, static UI | fastapi, uvicorn[standard] |
 | [models/](../../escanor/models/) | Provider-neutral `Model` + four providers + mock | SDKs / urllib |
 
@@ -214,5 +238,8 @@ flowchart TD
 | `[voice] tts / tts_voice` | `piper` / default `en_US-lessac-medium` | text-to-speech (reuses `~/.kmare/voices`) |
 | `[voice] wake_word` | `hey_jarvis` | openWakeWord model |
 | `[voice] barge_in` | `off` | `headphones` enables talking over Escanor in `listen` (D24) |
+| `[music] enabled / api_url` | `true` / `http://127.0.0.1:26538` | YouTube Music app API Server plugin |
+| `[music] dj_model / patter_every` | `haiku` / `2` | who picks and talks; intro every Nth track |
+| `[music] daily_model_calls / duck_level` | `150` / `20` | DJ spend cap; music volume while talking |
 | `[server] host / port` | `127.0.0.1` / `8770` | web UI address (D26) |
 | `ESCANOR_HOME` | `~/.escanor` | data directory |

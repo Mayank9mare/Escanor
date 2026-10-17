@@ -28,6 +28,7 @@ from .tools.system_tools import EnableToolsTool, GetTimeTool, SwitchModelTool
 
 GROUP_DESCRIPTIONS = {
     "brain": "write, append to and list notes in the second brain; forget facts",
+    "music": "play, queue and control YouTube Music; DJ mode with spoken intros",
 }
 
 
@@ -97,4 +98,33 @@ def build_app(settings: dict, model: Model, model_spec: str) -> Escanor:
     if skills:
         registry.add(UseSkillTool(skills))
         registry.add(ReadSkillFileTool(skills))
-    return Escanor(agent=agent, settings=settings, skills=skills, vault=vault, index=index)
+    escanor = Escanor(agent=agent, settings=settings, skills=skills, vault=vault, index=index)
+    if settings["music"]["enabled"]:
+        install_music(escanor)
+    return escanor
+
+
+def install_music(escanor: Escanor) -> None:
+    """YouTube Music: player + library + DJ, their tools, and the ducker that
+    turns the music down while Escanor talks. The DJ's voice (`dj.say`) is
+    attached by voice/runtime.py when there's a speaker."""
+    from .music.dj import DJ, SpendGuard
+    from .music.library import MusicLibrary
+    from .music.player import PlayerDucker, YouTubeMusicPlayer
+    from .music.tools import music_tools
+
+    music = escanor.settings["music"]
+    home = config.data_dir()
+    player = YouTubeMusicPlayer(music["api_url"], token_path=home / "ytm_token")
+    library = MusicLibrary(auth_path=home / "ytmusic_auth.json")
+    try:
+        dj_model, _ = build_model(music["dj_model"], escanor.settings)
+    except (ValueError, RuntimeError):
+        dj_model = None  # no key: the DJ still picks (first radio track) but stays quiet
+    dj = DJ(player, library, dj_model, SpendGuard(home / "dj_usage.json", int(music["daily_model_calls"])),
+            patter_every=int(music["patter_every"]))
+    for tool in music_tools(player, library, dj):
+        escanor.agent.tools.add(tool)
+    escanor.services.update(player=player, library=library, dj=dj,
+                            ducker=PlayerDucker(YouTubeMusicPlayer(music["api_url"], home / "ytm_token", timeout=1.5),
+                                                level=int(music["duck_level"])))
