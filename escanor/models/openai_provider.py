@@ -1,0 +1,184 @@
+"""
+models/openai_provider.py
+
+Talks to OpenAI's chat models via the Chat Completions API. Like
+anthropic_provider.py, this file is the only place that knows OpenAI's
+specific message format.
+
+Also doubles as the provider for any other OpenAI-compatible chat
+completions endpoint (e.g. OpenCode Zen, Gemini, Sarvam -- see
+registry.py's "opencode"/"gemini"/"sarvam" branches) by passing a
+different `base_url` -- the request/response shape is the same, only
+the host and model names differ. Sarvam additionally needs a
+non-standard auth header instead of `Authorization: Bearer`, hence
+`extra_headers` below.
+"""
+from __future__ import annotations
+import json
+from typing import Iterator
+from .base import Model, ModelResponse, StreamEvent, ToolCall
+
+
+class OpenAIModel(Model):
+    def __init__(
+        self, model_name: str, api_key: str, base_url: str | None = None,
+        extra_headers: dict[str, str] | None = None,
+    ):
+        try:
+            import openai
+        except ImportError as e:
+            raise RuntimeError("Run `pip install openai` to use --provider openai.") from e
+        self._openai = openai
+        self._client = openai.OpenAI(api_key=api_key, base_url=base_url, default_headers=extra_headers)
+        self.name = model_name
+
+    def chat(self, messages: list[dict], tools: list[dict] | None = None) -> ModelResponse:
+        openai_messages = self._to_openai_messages(messages)
+        openai_tools = (
+            [
+                {
+                    "type": "function",
+                    "function": {"name": t["name"], "description": t["description"], "parameters": t["input_schema"]},
+                }
+                for t in tools
+            ]
+            if tools else None
+        )
+
+        try:
+            response = self._client.chat.completions.create(
+                model=self.name,
+                messages=openai_messages,
+                tools=openai_tools,
+            )
+        except self._openai.OpenAIError as e:
+            # Same contract as ollama_provider.py: a provider failure
+            # (network, rate limit, upstream 5xx) surfaces as a
+            # RuntimeError -- what cli.py and chatbox/server.py already
+            # catch to report gracefully instead of crashing.
+            raise RuntimeError(f"OpenAI-compatible request failed: {e}") from e
+        choice = response.choices[0]
+        text = choice.message.content or ""
+        tool_calls = [
+            ToolCall(
+                id=tc.id, name=tc.function.name, arguments=json.loads(tc.function.arguments or "{}"),
+                # tc.model_extra carries fields outside the OpenAI spec
+                # that a compatible provider still sent back (e.g.
+                # Gemini's thought_signature) -- see ToolCall's
+                # docstring in base.py for why this has to round-trip.
+                provider_extra=tc.model_extra or None,
+            )
+            for tc in (choice.message.tool_calls or [])
+        ]
+        usage = response.usage
+        return ModelResponse(
+            text=text, tool_calls=tool_calls, stop_reason=choice.finish_reason or "end_turn",
+            input_tokens=usage.prompt_tokens if usage else None,
+            output_tokens=usage.completion_tokens if usage else None,
+        )
+
+    def chat_stream(self, messages: list[dict]) -> Iterator[str]:
+        openai_messages = self._to_openai_messages(messages)
+        try:
+            stream = self._client.chat.completions.create(model=self.name, messages=openai_messages, stream=True)
+            for chunk in stream:
+                # Some OpenAI-compatible providers (confirmed: Sarvam)
+                # send a final chunk with an empty choices list -- a
+                # trailing usage summary, not a text delta.
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta.content
+                if delta:
+                    yield delta
+        except self._openai.OpenAIError as e:
+            raise RuntimeError(f"OpenAI-compatible streaming request failed: {e}") from e
+
+    def chat_stream_tools(self, messages: list[dict], tools: list[dict] | None = None) -> Iterator[StreamEvent]:
+        """Streaming with tool calls. Tool calls arrive as fragments keyed
+        by `index`: the first fragment for an index carries id + name, the
+        rest append to `arguments` (a JSON string, complete only at the
+        end). Provider-specific extras on a fragment (Gemini's
+        thought_signature) are merged into provider_extra so they
+        round-trip like chat()'s do."""
+        request: dict = {"model": self.name, "messages": self._to_openai_messages(messages), "stream": True}
+        if tools:
+            request["tools"] = self._to_openai_tools(tools)
+
+        text_parts: list[str] = []
+        calls: dict[int, dict] = {}
+        finish_reason = None
+        try:
+            for chunk in self._client.chat.completions.create(**request):
+                if not chunk.choices:
+                    continue
+                choice = chunk.choices[0]
+                delta = choice.delta
+                if delta.content:
+                    text_parts.append(delta.content)
+                    yield StreamEvent("text", text=delta.content)
+                for fragment in delta.tool_calls or []:
+                    slot = calls.setdefault(fragment.index, {"id": None, "name": "", "arguments": "", "extra": {}})
+                    if fragment.id:
+                        slot["id"] = fragment.id
+                    if fragment.function and fragment.function.name:
+                        slot["name"] = fragment.function.name
+                    if fragment.function and fragment.function.arguments:
+                        slot["arguments"] += fragment.function.arguments
+                    if fragment.model_extra:
+                        slot["extra"].update(fragment.model_extra)
+                if choice.finish_reason:
+                    finish_reason = choice.finish_reason
+        except self._openai.OpenAIError as e:
+            raise RuntimeError(f"OpenAI-compatible streaming request failed: {e}") from e
+
+        tool_calls = []
+        for index in sorted(calls):
+            slot = calls[index]
+            try:
+                arguments = json.loads(slot["arguments"] or "{}")
+            except json.JSONDecodeError:
+                arguments = {"_unparseable_arguments": slot["arguments"]}
+            tool_calls.append(ToolCall(
+                id=slot["id"] or f"call_{index}", name=slot["name"], arguments=arguments,
+                provider_extra=slot["extra"] or None,
+            ))
+        response = ModelResponse(
+            text="".join(text_parts), tool_calls=tool_calls,
+            stop_reason="tool_use" if tool_calls else (finish_reason or "end_turn"),
+        )
+        yield StreamEvent("done", response=response)
+
+    @staticmethod
+    def _to_openai_tools(tools: list[dict]) -> list[dict]:
+        return [
+            {"type": "function", "function": {"name": t["name"], "description": t["description"], "parameters": t["input_schema"]}}
+            for t in tools
+        ]
+
+    @staticmethod
+    def _to_openai_messages(messages: list[dict]) -> list[dict]:
+        openai_messages: list[dict] = []
+        for m in messages:
+            if m["role"] == "system":
+                openai_messages.append({"role": "system", "content": m["content"]})
+
+            elif m["role"] == "user":
+                openai_messages.append({"role": "user", "content": m["content"]})
+
+            elif m["role"] == "assistant":
+                entry: dict = {"role": "assistant", "content": m.get("content") or None}
+                if m.get("tool_calls"):
+                    entry["tool_calls"] = [
+                        {
+                            "id": call.id,
+                            "type": "function",
+                            "function": {"name": call.name, "arguments": json.dumps(call.arguments)},
+                            **(call.provider_extra or {}),
+                        }
+                        for call in m["tool_calls"]
+                    ]
+                openai_messages.append(entry)
+
+            elif m["role"] == "tool":
+                openai_messages.append({"role": "tool", "tool_call_id": m["tool_call_id"], "content": m["content"]})
+        return openai_messages

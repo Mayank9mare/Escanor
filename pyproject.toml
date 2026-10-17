@@ -1,0 +1,26 @@
+[project]
+name = "escanor"
+version = "0.1.0"
+description = "A local, Jarvis-style personal assistant: second brain, research tutor, AI DJ, voice."
+requires-python = ">=3.12,<3.14"
+dependencies = []
+
+[project.optional-dependencies]
+anthropic = ["anthropic>=0.60"]
+openai = ["openai>=1.40"]
+all-models = ["anthropic>=0.60", "openai>=1.40"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+
+[project.scripts]
+escanor = "escanor.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["escanor*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
