@@ -1,7 +1,7 @@
 """
-chatbox/web_search.py
+assistant/web_search.py
 
-A free, no-API-key web search tool for kmare-chat, via DuckDuckGo.
+A free, no-API-key web search for Escanor (ported from kmare-chat), via DuckDuckGo.
 No account, no key, no quota -- matching this project's existing
 preference for zero-setup defaults (the mock provider, Ollama needing
 no key). Not a general-purpose scraping library.
@@ -29,22 +29,6 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
-
-WEB_SEARCH_TOOL_SCHEMA = {
-    "name": "web_search",
-    "description": (
-        "Search the web and get back a short list of titles, URLs, and snippets. "
-        "Use this ONLY for things that might be recent, or that you're genuinely "
-        "not confident about from memory. Do NOT use this for greetings ('hi', "
-        "'hello'), small talk, simple math, or well-known facts you already know "
-        "confidently -- answer those directly without searching."
-    ),
-    "input_schema": {
-        "type": "object",
-        "properties": {"query": {"type": "string", "description": "What to search for."}},
-        "required": ["query"],
-    },
-}
 
 _HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko)"}
 

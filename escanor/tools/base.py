@@ -1,21 +1,35 @@
 """
 tools/base.py
 
-A "Tool" is an action the agent is allowed to take in the real world:
-reading a file, writing a file, running a shell command, and so on.
+A "Tool" is an action Escanor may take: look something up, read a file,
+control the music. The model can only ASK to run a tool by name with
+arguments; the agent decides whether it may run (tools/permissions.py)
+and then runs it.
 
-The model itself cannot touch your computer directly. It can only ASK
-to run a tool by name, with some arguments. The harness (this program)
-is the only thing that actually does it -- and it decides whether to
-allow it (see harness/permissions.py).
+Each tool declares, as class attributes:
 
-This file defines the common shape every tool must follow, the same
-way models/base.py defines the shape every AI provider must follow.
+  side_effect     "read"     -- only reads (search, fetch, time)
+                  "write"    -- changes Escanor's own state (notes, queue)
+                  "external" -- acts on the world outside the conversation
+                                (sends, creates, deletes, controls apps):
+                                always needs the user's confirmation
+  group           which tool group it belongs to. "core" tools are always
+                  offered to the model; other groups are switched on with
+                  the enable_tools tool, keeping each request small.
+  untrusted_output  True when the result contains text from outside
+                  (web pages, papers, imported notes) that could try to
+                  instruct the model. Such output is fenced as data.
+  affects_prompt  True when what it writes is put into every future
+                  prompt (e.g. remembered facts). After untrusted content
+                  was read in a turn, these need confirmation too.
 """
 from __future__ import annotations
+import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
+
+READ, WRITE, EXTERNAL = "read", "write", "external"
 
 
 @dataclass
@@ -32,6 +46,10 @@ class Tool(ABC):
     # A JSON schema describing the arguments this tool accepts. Models
     # read this to know how to call the tool correctly.
     input_schema: dict
+    side_effect: str = READ
+    group: str = "core"
+    untrusted_output: bool = False
+    affects_prompt: bool = False
 
     @abstractmethod
     def run(self, **kwargs) -> ToolResult:
@@ -44,3 +62,7 @@ class Tool(ABC):
             "description": self.description,
             "input_schema": self.input_schema,
         }
+
+    def describe_call(self, arguments: dict) -> str:
+        """One line shown to the user when asking to confirm this call."""
+        return f"{self.name} {json.dumps(arguments, ensure_ascii=False)}"

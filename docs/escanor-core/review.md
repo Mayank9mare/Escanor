@@ -1,39 +1,46 @@
 # Escanor core — Review Guide
 
-**Branch:** `main` · **Scope:** Phase 1 (scaffold + async CLI) · **Tests:** 53 passing ·
-**Updated:** 2026-10-17
+**Branch:** `main` · **Scope:** Phases 1–2 (scaffold, async CLI, tools, permissions, web, skills) ·
+**Tests:** 97 passing · **Updated:** 2026-10-17
 
 ## TL;DR (read this first)
 
-Escanor now has a working text chat in the terminal that can switch between Claude (Haiku by
-default, Sonnet), GPT, Gemini, a local Ollama model, or a fake model, mid-conversation. The model
-code is copied from kmare-code and extended so replies stream while still allowing tool calls.
-On top sits a new async agent loop that the web UI and voice will reuse. No real tools exist yet;
-Phase 2 adds them. The riskiest spots are the Claude thinking replay
-([anthropic_provider.py](../../escanor/models/anthropic_provider.py)) and the history rewrite on a
-model switch ([session.py](../../escanor/core/session.py)), since both must keep provider rules exactly.
+Escanor is a terminal chat that can switch between Claude (Haiku by default, Sonnet), GPT,
+Gemini, a local Ollama model or a fake model, mid-conversation, by `/model` or just by asking.
+Phase 2 gave it its first tools: the time, web search, reading a web page, switching models, and
+loading your skills (`learn-anything`, `grill-me`) from mayank-awesome-skills. Every tool call goes
+through a permission gate that asks before anything acts on the outside world, and web content is
+fenced so a page can't instruct Escanor. The riskiest spots are the permission gate
+([permissions.py](../../escanor/tools/permissions.py)), `web_fetch`'s address checks
+([web.py](../../escanor/assistant/web.py)), and Claude's thinking replay
+([anthropic_provider.py](../../escanor/models/anthropic_provider.py)), which is unit-tested but not yet run live.
 
-## How to review in ~25 minutes
+## How to review in ~40 minutes
 
 Read in this order: it follows a message from the model interface up to the terminal. ⭐ = spend most time here.
 
 | # | File | What it does (simple words) | What to check | Size |
 |---|---|---|---|---|
-| 1 | [models/base.py](../../escanor/models/base.py) | The common model interface + new `StreamEvent`, `raw` | `chat_stream_tools` contract: text events, then exactly one done | +40 |
-| 2 ⭐ | [models/anthropic_provider.py](../../escanor/models/anthropic_provider.py) | Talks to Claude | raw replay only for same model; tool-result merging; errors → RuntimeError | rewrite |
+| 1 | [models/base.py](../../escanor/models/base.py) | The common model interface + `StreamEvent`, `raw` | `chat_stream_tools`: text events, then exactly one done | small |
+| 2 ⭐ | [models/anthropic_provider.py](../../escanor/models/anthropic_provider.py) | Talks to Claude | raw replay only for same model; tool-result merging; errors → RuntimeError | 150 |
 | 3 | [models/openai_provider.py](../../escanor/models/openai_provider.py) | GPT and Gemini | fragment assembly by index; `thought_signature` kept | +70 |
 | 4 | [models/ollama_provider.py](../../escanor/models/ollama_provider.py) | Local models | JSON hold-back ([D11](decision.md#d11-ollama-hold-back-text-that-starts-like-a-json-tool-call)) | +70 |
 | 5 | [models/instrumented.py](../../escanor/models/instrumented.py), [registry.py](../../escanor/models/registry.py), [mock_provider.py](../../escanor/models/mock_provider.py) | Telemetry wrapper, factory, fake model | streaming forwarded ([B3](bugs.md)) | small |
-| 6 | [config.py](../../escanor/config.py) | Keys, `config.toml`, aliases | aliases, `.env` never overrides exported vars | new |
-| 7 ⭐ | [core/session.py](../../escanor/core/session.py) | Saves the conversation, keeps it valid | `repair()`; `collapse_tool_history()` only touches other models' turns | new |
-| 8 | [core/prompts.py](../../escanor/core/prompts.py), [core/events.py](../../escanor/core/events.py) | System prompt, event types | nothing time-varying in the prompt ([D9](decision.md#d9-no-clock-time-in-the-system-prompt)) | new |
-| 9 ⭐ | [core/agent.py](../../escanor/core/agent.py) | The turn loop | `astream` closes the stream on early exit; max_tokens/refusal handling | new |
-| 10 | [cli.py](../../escanor/cli.py) | Terminal chat | Ctrl-C cancels only the turn | new |
-| 11 | [tests/](../../tests/) | 53 offline tests | error paths, not just happy paths | new |
+| 6 | [config.py](../../escanor/config.py) | Keys, `config.toml`, aliases, skills/web settings | `.env` never overrides exported vars | 150 |
+| 7 ⭐ | [core/session.py](../../escanor/core/session.py) | Saves the conversation, keeps it valid | `repair()`; `collapse_tool_history()` only touches other models' turns | 230 |
+| 8 | [core/prompts.py](../../escanor/core/prompts.py), [core/events.py](../../escanor/core/events.py) | System prompt, event types | nothing time-varying in the prompt ([D9](decision.md#d9-no-clock-time-in-the-system-prompt)) | small |
+| 9 ⭐ | [core/agent.py](../../escanor/core/agent.py) | The turn loop | `astream` early close; max_tokens/refusal; deferred switch in `finally` | 200 |
+| 10 | [tools/base.py](../../escanor/tools/base.py), [tools/registry.py](../../escanor/tools/registry.py) | Tool shape (side effect, group, untrusted) and lookup | disabled-group calls refused | 140 |
+| 11 ⭐ | [tools/permissions.py](../../escanor/tools/permissions.py) | Asks / refuses / fences each call | taint is per turn; closing tag neutralised | 76 |
+| 12 | [tools/system_tools.py](../../escanor/tools/system_tools.py) | get_time, enable_tools, switch_model | switch is requested, not applied | 100 |
+| 13 ⭐ | [assistant/web.py](../../escanor/assistant/web.py) | web_search, web_fetch | non-global addresses refused, redirects re-checked ([D12](decision.md#d12-web_fetch-refuses-local-and-private-addresses-re-checked-on-every-redirect)) | 230 |
+| 14 | [skills/loader.py](../../escanor/skills/loader.py), [skills/tools.py](../../escanor/skills/tools.py) | Finds and loads SKILL.md skills | path confinement in `Skill.read` | 170 |
+| 15 | [app.py](../../escanor/app.py) | Puts it all together | which tools and sections are installed | 56 |
+| 16 | [cli.py](../../escanor/cli.py) | Terminal chat | `StdinLines` ([B8](bugs.md)); Ctrl-C cancels only the turn | 270 |
+| 17 | [tests/](../../tests/) | 97 offline tests | error paths, not just happy paths | — |
 
 Skip or skim: [telemetry.py](../../escanor/telemetry.py) (copied, path renamed),
-[tools/base.py](../../escanor/tools/base.py) (copied), [assistant/web_search.py](../../escanor/assistant/web_search.py)
-(copied, wired up in Phase 2).
+[assistant/web_search.py](../../escanor/assistant/web_search.py) (copied DuckDuckGo scraper).
 
 ## The change, file by file
 
@@ -44,11 +51,10 @@ keeps Claude's exact reply blocks so they can be sent back next time.
 
 **Why it's built this way:** [D3](decision.md#d3-replay-claudes-exact-reply-blocks-including-thinking-for-same-model-turns), [D6](decision.md#d6-no-eager_input_streaming-on-claude-tools).
 
-**Look closely at:**
-- [L85–L107](../../escanor/models/anthropic_provider.py#L85-L107): which block types are kept in `raw`.
-- [L109–L151](../../escanor/models/anthropic_provider.py#L109-L151): replay condition and tool-result merging.
+**Look closely at:** [L85–L107](../../escanor/models/anthropic_provider.py#L85-L107) (blocks kept in `raw`),
+[L109–L151](../../escanor/models/anthropic_provider.py#L109-L151) (replay condition, tool-result merging).
 
-- [ ] **VERIFY** a Haiku tool loop works live once a key is set (thinking replay is only unit-tested).
+- [ ] **VERIFY** a Haiku tool loop works live once a key is set (e.g. "what time is it?").
 - [ ] **QUESTION** default effort `low` ([D7](decision.md#d7-default-claude-effort-low)): OK for you?
 
 ### 7. [session.py](../../escanor/core/session.py) ⭐
@@ -58,14 +64,32 @@ a tool call left without an answer, and tool turns from a model you've switched 
 
 **Look closely at:** [L160–L194](../../escanor/core/session.py#L160-L194) `collapse_tool_history`.
 
-- [ ] **VERIFY** collapsed history reads sensibly to the next model (try `/model gemini` after a tool turn, Phase 2).
+- [ ] **VERIFY** collapsed history reads sensibly to the next model: ask for a web search on Haiku, then `/model gemini` and ask a follow-up.
 
 ### 9. [agent.py](../../escanor/core/agent.py) ⭐
 
 **In simple words:** the loop: ask the model, stream the reply, run requested tools, repeat.
 
-**Look closely at:** [L60–L101](../../escanor/core/agent.py#L60-L101) `astream` (thread bridge and early close),
-then `run_turn`'s handling of `max_tokens` and `refusal`.
+**Look closely at:** [L60–L101](../../escanor/core/agent.py#L60-L101) `astream`;
+[L137–L144](../../escanor/core/agent.py#L137-L144) the deferred switch ([D13](decision.md#d13-switch_model-takes-effect-after-the-current-turn)).
+
+### 11. [permissions.py](../../escanor/tools/permissions.py) ⭐
+
+**In simple words:** for each tool call, decides "just do it", "ask first" or "no", and wraps web
+text so the model treats it as data.
+
+**Look closely at:** [L46–L64](../../escanor/tools/permissions.py#L46-L64) the decision;
+[L66–L76](../../escanor/tools/permissions.py#L66-L76) per-turn taint ([D16](decision.md#d16-untrusted-taint-is-computed-from-the-session-per-turn)).
+
+- [ ] **VERIFY** no Phase 2 tool is `external`, so nothing asks yet. The first askers arrive in Phases 3 and 6.
+
+### 13. [web.py](../../escanor/assistant/web.py) ⭐
+
+**In simple words:** search and read web pages, refusing anything on your own machine or home network.
+
+**Look closely at:** [L49–L75](../../escanor/assistant/web.py#L49-L75) `check_url` and redirect re-check.
+
+- [ ] **QUESTION** DNS rebinding is not covered (D12 trade-off). OK while every fetch is visible in the chat?
 
 ## Things to decide together
 
@@ -77,12 +101,17 @@ then `run_turn`'s handling of `max_tokens` and `refusal`.
 | ID | Severity | One line | Blocks merge? |
 |---|---|---|---|
 | B5 | LOW | No token usage from OpenAI/Gemini streams | No |
-| B6 | LOW | Cancelled turn holds its stream until the next chunk | No |
+| B6 | LOW | Cancelled turn holds its stream until the next chunk | No (Phase 4) |
+| B9 | LOW | Telemetry stores whole conversations per call | No (Phase 8) |
+| B10 | LOW | Model-switch collapse resets message timestamps | No |
 
 ## How to verify locally
 
 ```bash
 .venv/bin/pytest -q
-.venv/bin/escanor --model mock          # no key needed
-.venv/bin/escanor                       # Haiku, needs ANTHROPIC_API_KEY
+.venv/bin/escanor --model mock          # no key needed; try /skills and /tools
+.venv/bin/escanor                       # Haiku, needs ANTHROPIC_API_KEY in .env
 ```
+
+Then, with a key: "what's the time?", "search the web for Kokoro TTS", "read https://example.com",
+"teach me how attention works in transformers" (loads learn-anything), "switch to sonnet".

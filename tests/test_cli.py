@@ -1,5 +1,9 @@
+import asyncio
+import os
+import sys
+import pytest
 from escanor import config
-from escanor.cli import Repl, build_model, main
+from escanor.cli import Repl, StdinLines, build_model, main
 from escanor.core.agent import Agent
 
 
@@ -38,3 +42,32 @@ def test_should_return_error_code_when_default_model_has_no_key(capsys, monkeypa
     monkeypatch.setattr(config, "load_dotenv", lambda path=None: None)  # ignore any real .env
     assert main([]) == 2
     assert "escanor --model mock" in capsys.readouterr().err
+
+
+class _PipeStdin:
+    def __init__(self, fd):
+        self._fd = fd
+
+    def fileno(self):
+        return self._fd
+
+
+async def test_should_deliver_next_line_to_prompt_when_confirmation_cancelled(monkeypatch):
+    """B8: a confirmation interrupted by Ctrl-C must not swallow the next line."""
+    read_fd, write_fd = os.pipe()
+    monkeypatch.setattr(sys, "stdin", _PipeStdin(read_fd))
+    lines = StdinLines()
+    lines.start()
+    try:
+        pending = asyncio.ensure_future(lines.readline("Allow? "))
+        await asyncio.sleep(0.01)
+        pending.cancel()
+        os.write(write_fd, b"hello\nsecond line\n")
+        assert await asyncio.wait_for(lines.readline("you > "), 2) == "hello"
+        assert await asyncio.wait_for(lines.readline("you > "), 2) == "second line"
+        os.close(write_fd)
+        with pytest.raises(EOFError):
+            await asyncio.wait_for(lines.readline("you > "), 2)
+    finally:
+        lines.stop()
+        os.close(read_fd)

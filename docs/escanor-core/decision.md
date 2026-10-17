@@ -19,6 +19,11 @@ what we're trading away. Newest at the bottom. Reversed decisions are marked **S
 | D9 | No clock time in the system prompt | Accepted | 2026-10-17 |
 | D10 | Store each message as one JSON body in SQLite | Accepted | 2026-10-17 |
 | D11 | Ollama: hold back text that starts like a JSON tool call | Accepted | 2026-10-17 |
+| D12 | `web_fetch` refuses local/private addresses, re-checked on redirects | Accepted | 2026-10-17 |
+| D13 | `switch_model` takes effect after the current turn | Accepted | 2026-10-17 |
+| D14 | Tool groups exist now, though only `core` has tools | Accepted | 2026-10-17 |
+| D15 | `set_timer` moves from Phase 2 to Phase 6 | Accepted | 2026-10-17 |
+| D16 | Untrusted taint is computed from the session, per turn | Accepted | 2026-10-17 |
 
 ---
 
@@ -280,3 +285,112 @@ recovers these at the end, but when streaming the JSON would already have been p
 
 ### Decision
 A ([ollama_provider.py](../../escanor/models/ollama_provider.py), `chat_stream_tools`).
+
+---
+
+## D12. `web_fetch` refuses local and private addresses, re-checked on every redirect
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Step:** 7
+
+### Context
+The model chooses which URL to fetch, and the URL may come from a page it just read. Escanor runs on
+your Mac next to local services (the YouTube Music app's API on `localhost:26538`, your router admin
+page) that a web page must not be able to reach through it.
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. Resolve the host; refuse any non-global address; check each redirect too** | Blocks the obvious paths to localhost/LAN | DNS rebinding (host resolves public at check, private at connect) not covered |
+| B. Allow everything | Simplest | A page could steer Escanor at local services |
+| C. Pin the checked IP for the connection | Also closes DNS rebinding | Needs a custom HTTP connection class; TLS SNI handling |
+
+### Decision
+A ([web.py#L49-L75](../../escanor/assistant/web.py#L49-L75)), switchable with `[web] allow_private_hosts`.
+
+### Trade-offs accepted
+- DNS rebinding stays possible. Acceptable for a personal assistant whose fetches you can see in the CLI.
+
+### Revisit if
+Escanor fetches unattended (e.g. DJ looking up artist facts in the background) → do C.
+
+---
+
+## D13. `switch_model` takes effect after the current turn
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Step:** 6
+
+### Context
+Saying "switch to Sonnet" makes the current model call the `switch_model` tool mid-turn. If the switch
+happened immediately, the next step would send the old model's in-flight tool calls to the new model,
+which can be rejected (D4).
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. Queue it; apply when the turn ends; emit `ModelSwitched`** | A turn never mixes models | The confirmation sentence still comes from the old model |
+| B. Switch immediately and collapse history mid-turn | New model answers at once | Rewrites history inside a live Claude tool loop (breaks thinking replay) |
+
+### Decision
+A ([agent.py#L121-L144](../../escanor/core/agent.py#L121-L145)). Applied in a `finally`, so a cancelled turn still switches.
+
+---
+
+## D14. Tool groups exist now, though only `core` has tools
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Step:** 6
+
+### Context
+The plan caps tool schemas at ~15 per call via groups switched on by `enable_tools`. Phase 2 has
+seven tools, all core.
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. Build the mechanism now** | Phases 3–6 just set `group = "music"` etc.; tested once | `enable_tools` is in every request with nothing to enable |
+| B. Add it in Phase 5 when music arrives | Less code now | Retrofit across several phases' tools |
+
+### Decision
+A ([registry.py](../../escanor/tools/registry.py)). `enable_tools` says "no extra groups yet" until there are some.
+
+---
+
+## D15. `set_timer` moves from Phase 2 to Phase 6
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Step:** 6
+
+### Context
+A timer has to announce itself later, outside any turn. The CLI has no channel for that yet; voice
+(Phase 4) adds the audio owner that timers should speak through.
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. Build it with reminders in Phase 6** | Uses the real notification path (speaker + macOS notification) | No timers until then |
+| B. CLI-only timer that prints | Available now | Thrown away once voice exists |
+
+### Decision
+A. Added to Phase 6 in [IMPLEMENTATION_PLAN.md](../../IMPLEMENTATION_PLAN.md).
+
+---
+
+## D16. Untrusted taint is computed from the session, per turn
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Step:** 6
+
+### Context
+`remember_fact` (Phase 3) must ask for confirmation if the same turn already read untrusted content
+(plan §2.4). Something has to know whether the turn is "tainted".
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. Scan the session back to the latest user message for untrusted tool calls** | Stateless; correct after restarts and interruptions | O(turn length) per gated call (tiny) |
+| B. A flag on the gate, reset per turn | O(1) | Wrong after a crash/resume; one more piece of state to keep in sync |
+
+### Decision
+A ([permissions.py#L66-L76](../../escanor/tools/permissions.py#L66-L77)).

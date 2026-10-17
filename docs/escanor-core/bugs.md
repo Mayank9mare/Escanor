@@ -14,6 +14,9 @@ Fixed bugs stay here (struck through) as an audit trail. IDs never get reused.
 | B5 | LOW | OpenAI/Gemini streaming reports no token usage | 🔴 OPEN | step 1 | — |
 | B6 | LOW | A cancelled turn keeps its provider stream open until the next chunk | ⏸️ DEFERRED | step 2 | Phase 4 (see D2) |
 | ~~B7~~ | ~~LOW~~ | ~~CLI test could start a real REPL if a `.env` had a key~~ | ✅ FIXED | step 5 · test review | step 5 |
+| ~~B8~~ | ~~MEDIUM~~ | ~~A cancelled confirmation swallowed the next line you typed~~ | ✅ FIXED | review pass 1 (Phase 2) | step 9 |
+| B9 | LOW | Telemetry stores the whole conversation on every call | ⏸️ DEFERRED | review pass 1 | Phase 8 |
+| B10 | LOW | Collapsing history on a model switch resets message timestamps | 🔴 OPEN | review pass 1 | — |
 
 Severity: **HIGH** = data loss, wrong result, security, blocks testing/release · **MEDIUM** =
 breaks an edge case or error path · **LOW** = minor or cosmetic.
@@ -32,6 +35,15 @@ breaks an edge case or error path · **LOW** = minor or cosmetic.
 - **Proposed fix:** send `stream_options` for `openai` only (and Gemini once verified live), and read
   usage from the final usage-only chunk.
 - **Flow impact:** none on behaviour; cost tracking (Phase 5 spend cap) needs it.
+
+### B10. Collapsing history on a model switch resets message timestamps
+
+- **Severity:** LOW · **Found:** 2026-10-17, review pass 1 (Phase 2)
+- **Where:** [session.py `_replace_all`](../../escanor/core/session.py#L107)
+- **Symptom:** after a model switch that collapses tool turns, every message's `created_at` becomes the switch time.
+- **Root cause:** the rewrite deletes and re-inserts rows; message dicts don't carry their own time.
+- **Proposed fix:** keep `created_at` in each message dict on append and write it back on replace.
+- **Flow impact:** none on behaviour; matters once the brain (Phase 3) indexes conversations by date.
 
 ---
 
@@ -80,6 +92,16 @@ breaks an edge case or error path · **LOW** = minor or cosmetic.
   real model and block on stdin.
 - **Fix / regression test:** the test stubs `load_dotenv` ([test_cli.py](../../tests/test_cli.py)).
 
+### ~~B8. A cancelled confirmation swallowed the next line you typed~~
+
+- **Severity:** MEDIUM · **Found:** 2026-10-17, review pass 1 at the Phase 2 boundary · **Fixed:** step 9
+- **Root cause:** the CLI read keyboard input with `input()` on a worker thread. Ctrl-C during an
+  "Allow? [y/N]" question cancelled the turn but not the thread, which kept waiting and took the next
+  line you typed as its answer, so that message never reached Escanor.
+- **Fix:** one event-loop stdin reader (`add_reader` + `os.read`) shared by the prompt and confirmations;
+  a cancelled wait just stops waiting. [cli.py `StdinLines`](../../escanor/cli.py#L49).
+- **Regression test:** [test_should_deliver_next_line_to_prompt_when_confirmation_cancelled](../../tests/test_cli.py#L55)
+
 ---
 
 ## ⏸️ Deferred / 🚫 Won't fix
@@ -88,3 +110,9 @@ breaks an edge case or error path · **LOW** = minor or cosmetic.
 
 - **Why not now:** harmless in the CLI (the reply is discarded); matters for barge-in latency in
   Phase 4. Trade-off recorded in [D2](decision.md#d2-async-agent-loop-blocking-providers-and-tools-run-on-worker-threads).
+
+### B9. Telemetry stores the whole conversation on every call
+
+- **Why not now:** copied behaviour from kmare-code; `telemetry.db` grows roughly with
+  (turns × conversation length). Harmless at personal scale for months. Phase 8 (cost dashboard)
+  should store a hash or the last message only.

@@ -51,6 +51,17 @@ DEFAULTS: dict[str, Any] = {
     "agent": {
         "max_steps": 8,
     },
+    "skills": {
+        # Folders containing <skill>/SKILL.md. Earlier folders win on a name clash.
+        "dirs": ["~/.escanor/skills", "~/projects/mayank-awesome-skills"],
+        # Only these are offered; most of that repo is engineering tooling.
+        # "kb" is deliberately absent: it would keep a second notes store.
+        "allow": ["learn-anything", "grill-me"],
+    },
+    "web": {
+        # web_fetch refuses localhost / private-network addresses unless true.
+        "allow_private_hosts": False,
+    },
 }
 
 

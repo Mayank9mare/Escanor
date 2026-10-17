@@ -34,16 +34,7 @@ class OpenAIModel(Model):
 
     def chat(self, messages: list[dict], tools: list[dict] | None = None) -> ModelResponse:
         openai_messages = self._to_openai_messages(messages)
-        openai_tools = (
-            [
-                {
-                    "type": "function",
-                    "function": {"name": t["name"], "description": t["description"], "parameters": t["input_schema"]},
-                }
-                for t in tools
-            ]
-            if tools else None
-        )
+        openai_tools = self._to_openai_tools(tools) if tools else None
 
         try:
             response = self._client.chat.completions.create(

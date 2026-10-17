@@ -4,7 +4,8 @@ A local, Jarvis-style personal assistant: second brain, research tutor, AI DJ on
 and voice. See [PLAN.md](PLAN.md) for what it will be and
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for how it's being built.
 
-**Status:** Phase 1 (text chat with switchable models) works.
+**Status:** Phases 1–2 done: text chat with switchable models (Haiku, Sonnet, GPT, Gemini, Ollama),
+web search and page reading, and skills from mayank-awesome-skills. Next: the second brain (Phase 3).
 
 ## Quickstart
 
@@ -24,6 +25,8 @@ No key yet? `.venv/bin/escanor --model mock` runs the whole loop with a fake mod
 | `/model` | show the current model |
 | `/model sonnet` | switch: `haiku`, `sonnet`, `gpt`, `gemini`, `local`, `mock`, or `provider:model-id` |
 | `/models` | list aliases |
+| `/skills` | list skills Escanor can load (e.g. learn-anything) |
+| `/tools` | list tool groups and whether they're on |
 | `/new` | start a new conversation |
 | `/quit` | exit (Ctrl-D works too) |
 

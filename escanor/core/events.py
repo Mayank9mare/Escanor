@@ -39,10 +39,17 @@ class TurnDone:
 
 
 @dataclass
+class ModelSwitched:
+    """Emitted after a turn in which the switch_model tool ran: later
+    turns are answered by `model_spec`."""
+    model_spec: str
+
+
+@dataclass
 class Error:
     """The turn ended abnormally (provider failure, step limit, cut-off
     reply). The session is left consistent either way."""
     message: str
 
 
-Event = TextDelta | ToolStarted | ToolFinished | TurnDone | Error
+Event = TextDelta | ToolStarted | ToolFinished | TurnDone | ModelSwitched | Error

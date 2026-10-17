@@ -35,7 +35,7 @@ escanor/
   tools/
     base.py registry.py  COPIED from kmare_code/tools (Tool, ToolResult, ToolRegistry)
     permissions.py       side_effect levels: read | write | external → confirm before external
-    system_tools.py      switch_model, get_time, set_timer
+    system_tools.py      switch_model, get_time, enable_tools (set_timer: Phase 6)
 
   skills/
     loader.py            scans skill dirs, parses SKILL.md frontmatter
@@ -239,25 +239,25 @@ Prove the three risky external pieces before building on them.
 
 **Done when:** a short `spikes/FINDINGS.md` records ports, auth steps, and response shapes.
 
-### Phase 1 — Scaffold + text CLI (1 day)
-- [ ] `pyproject.toml` (uv), extras: `anthropic`, `openai`, `voice`, `music`, `server`, `dev`.
-- [ ] Copy `models/`, `tools/base.py`, `tools/registry.py`, `telemetry.py`, `config.py` from kmare-code; rename imports `kmare_code` → `escanor`; trim providers to anthropic/openai/gemini/ollama/mock (drop opencode/sarvam chat unless wanted; keep Sarvam STT/TTS).
-- [ ] Add `resolve_alias` + `config.toml` loading; default `haiku`.
-- [ ] Async skeleton: `core/agent.py` with zero tools + `astream` thread bridge, so the CLI is
+### Phase 1 — Scaffold + text CLI (1 day) ✅ done 2026-10-17
+- [x] `pyproject.toml` (uv), extras: `anthropic`, `openai`, `voice`, `music`, `server`, `dev`.
+- [x] Copy `models/`, `tools/base.py`, `tools/registry.py`, `telemetry.py`, `config.py` from kmare-code; rename imports `kmare_code` → `escanor`; trim providers to anthropic/openai/gemini/ollama/mock (drop opencode/sarvam chat unless wanted; keep Sarvam STT/TTS).
+- [x] Add `resolve_alias` + `config.toml` loading; default `haiku`.
+- [x] Async skeleton: `core/agent.py` with zero tools + `astream` thread bridge, so the CLI is
       built on the real event stream from day one and isn't rewritten in Phase 2.
-- [ ] `cli.py` REPL consuming `Agent.run_turn` events, `/model`, `/new`, `/quit`.
-- [ ] `.env.example`, `README.md` quickstart.
+- [x] `cli.py` REPL consuming `Agent.run_turn` events, `/model`, `/new`, `/quit`.
+- [x] `.env.example`, `README.md` quickstart.
 
 **Done when:** `uv run escanor` chats with Haiku; `/model gemini` and `/model local` switch mid-conversation.
 **Tests:** alias resolution; registry builds each provider (with fake keys); CLI round-trip on mock provider.
 
-### Phase 2 — Agent core, tools, skills (2 days)
-- [ ] `StreamEvent` + `chat_stream_tools` for anthropic, openai(+gemini), ollama, mock (mock scripted to emit tool calls).
-- [ ] `core/events.py`, `core/agent.py`, `core/session.py` (SQLite), `core/prompts.py` (persona: concise, spoken-friendly, British-butler-optional).
-- [ ] `tools/permissions.py` + levels; `system_tools.py` (`switch_model`, `get_time`, `set_timer`).
-- [ ] `assistant/web.py`: port `web_search`, add `web_fetch` (readability-style text extraction, size-capped).
-- [ ] `skills/loader.py` + `use_skill`, `read_skill_file`; allow-list.
-- [ ] CLI renders events (tool calls shown dimmed, confirmations as y/n).
+### Phase 2 — Agent core, tools, skills (2 days) ✅ done 2026-10-17
+- [x] `StreamEvent` + `chat_stream_tools` for anthropic, openai(+gemini), ollama, mock (mock scripted to emit tool calls).
+- [x] `core/events.py`, `core/agent.py`, `core/session.py` (SQLite), `core/prompts.py` (persona: concise, spoken-friendly, British-butler-optional).
+- [x] `tools/permissions.py` + levels; `system_tools.py` (`switch_model`, `get_time`, `enable_tools`). `set_timer` moved to Phase 6 (decision D15).
+- [x] `assistant/web.py`: port `web_search`, add `web_fetch` (readability-style text extraction, size-capped).
+- [x] `skills/loader.py` + `use_skill`, `read_skill_file`; allow-list.
+- [x] CLI renders events (tool calls shown dimmed, confirmations as y/n).
 
 **Done when:** "what's the latest on <topic>?" triggers web_search → answer with sources; "teach me how transformers work" loads learn-anything and starts a Socratic session.
 **Tests:** agent loop with scripted mock model (0, 1, multi-step tool calls; MAX_STEPS); permission gate blocks `external` without confirm; OpenAI tool-call delta accumulation from recorded chunks; skill loader frontmatter parsing; switching Haiku → Gemini after a tool-using turn sends collapsed history (no foreign tool-call blocks); cancelling a turn mid-stream leaves a consistent session; tool groups keep schemas ≤15.
@@ -317,7 +317,7 @@ Prove the three risky external pieces before building on them.
 ### Phase 6 — Personal assistant (2 days)
 - [ ] `assistant/reminders.py`, `calendar.py` via AppleScript (read = `read`, create/modify = `external`).
 - [ ] `assistant/mac.py`: open app/url, notification, clipboard read.
-- [ ] Timers/alarms spoken through TTS; daily briefing command ("good morning": calendar, reminders, weather via web, top unread brain journal prompt).
+- [ ] `set_timer` (moved from Phase 2, D15) + timers/alarms spoken through TTS; daily briefing command ("good morning": calendar, reminders, weather via web, top unread brain journal prompt).
 - [ ] Optional later: Gmail/Google Calendar via OAuth, behind the same `external` confirmation.
 
 **Done when:** "remind me to call mom at 7" creates a reminder after confirmation; "what's on today?" reads the calendar.

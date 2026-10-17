@@ -23,7 +23,7 @@ from typing import AsyncIterator, Callable, Iterator, Protocol, TypeVar
 from ..models.base import Model, ModelResponse, ToolCall
 from ..tools.base import ToolResult
 from ..tools.registry import ToolRegistry
-from .events import Error, Event, TextDelta, ToolFinished, ToolStarted, TurnDone
+from .events import Error, Event, ModelSwitched, TextDelta, ToolFinished, ToolStarted, TurnDone
 from .prompts import PromptBuilder
 from .session import Session
 
@@ -110,6 +110,7 @@ class Agent:
         self.prompts = prompts or PromptBuilder()
         self.gate: Gate = gate or AllowAllGate()
         self.max_steps = max_steps
+        self._pending_switch: tuple[Model, str] | None = None
 
     def set_model(self, model: Model, model_spec: str) -> None:
         """Switch models between turns. The session's history is fixed up
@@ -117,11 +118,32 @@ class Agent:
         self.model = model
         self.model_spec = model_spec
 
+    def request_model_switch(self, model: Model, model_spec: str) -> None:
+        """Switch once the current turn ends (used by the switch_model tool),
+        so a turn never sends one model's in-flight tool calls to another."""
+        self._pending_switch = (model, model_spec)
+
+    def _apply_pending_switch(self) -> str | None:
+        if self._pending_switch is None:
+            return None
+        model, spec = self._pending_switch
+        self._pending_switch = None
+        self.set_model(model, spec)
+        return spec
+
     def tool_schemas(self) -> list[dict]:
         return self.tools.schemas()
 
     async def run_turn(self, session: Session, user_text: str, confirmer: Confirmer | None = None) -> AsyncIterator[Event]:
-        confirmer = confirmer or DenyConfirmer()
+        try:
+            async for event in self._steps(session, user_text, confirmer or DenyConfirmer()):
+                yield event
+        finally:
+            switched_to = self._apply_pending_switch()
+        if switched_to:
+            yield ModelSwitched(switched_to)
+
+    async def _steps(self, session: Session, user_text: str, confirmer: Confirmer) -> AsyncIterator[Event]:
         session.repair()
         session.collapse_tool_history(self.model_spec)
         session.append_user(user_text)
