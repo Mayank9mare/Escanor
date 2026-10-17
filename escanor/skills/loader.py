@@ -107,9 +107,12 @@ def discover(directories: list[Path], allow: list[str] | None = None) -> dict[st
 
 SKILL_RUNTIME_NOTE = """\
 Skills were written for a coding assistant, so map their instructions onto your own tools:
-reading files -> read_skill_file (for the skill's own files); searching or saving notes -> the brain
-tools once they exist. If a skill asks you to save something and no tool can, say so and give the
-user the text instead. Ask questions one at a time, and keep spoken answers short."""
+- the skill's own files (references/, templates/) -> read_skill_file
+- reading the user's notes -> brain_search / brain_read
+- saving files -> brain_write / brain_append (enable the "brain" tool group first). A path like
+  ~/.learn/<topic>.md becomes research/learn/<topic>.md in the brain.
+If a skill asks for something no tool can do, say so and give the user the text instead.
+Ask questions one at a time, and keep spoken answers short."""
 
 
 def skill_index_section(skills: dict[str, Skill]) -> str:

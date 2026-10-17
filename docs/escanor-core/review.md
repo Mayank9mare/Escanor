@@ -1,7 +1,7 @@
 # Escanor core — Review Guide
 
-**Branch:** `main` · **Scope:** Phases 1–2 (scaffold, async CLI, tools, permissions, web, skills) ·
-**Tests:** 97 passing · **Updated:** 2026-10-17
+**Branch:** `main` · **Scope:** Phases 1–3 (scaffold, async CLI, tools, permissions, web, skills, second brain) ·
+**Tests:** 122 passing · **Updated:** 2026-10-17
 
 ## TL;DR (read this first)
 
@@ -35,9 +35,12 @@ Read in this order: it follows a message from the model interface up to the term
 | 12 | [tools/system_tools.py](../../escanor/tools/system_tools.py) | get_time, enable_tools, switch_model | switch is requested, not applied | 100 |
 | 13 ⭐ | [assistant/web.py](../../escanor/assistant/web.py) | web_search, web_fetch | non-global addresses refused, redirects re-checked ([D12](decision.md#d12-web_fetch-refuses-local-and-private-addresses-re-checked-on-every-redirect)) | 230 |
 | 14 | [skills/loader.py](../../escanor/skills/loader.py), [skills/tools.py](../../escanor/skills/tools.py) | Finds and loads SKILL.md skills | path confinement in `Skill.read` | 170 |
-| 15 | [app.py](../../escanor/app.py) | Puts it all together | which tools and sections are installed | 56 |
-| 16 | [cli.py](../../escanor/cli.py) | Terminal chat | `StdinLines` ([B8](bugs.md)); Ctrl-C cancels only the turn | 270 |
-| 17 | [tests/](../../tests/) | 97 offline tests | error paths, not just happy paths | — |
+| 15 | [brain/vault.py](../../escanor/brain/vault.py) | Notes and facts on disk | path confinement; backup before replace/forget ([D17](decision.md#d17-brain-writes-need-no-confirmation-overwrites-are-backed-up-instead)) | 170 |
+| 16 ⭐ | [brain/index.py](../../escanor/brain/index.py) | Search over notes | incremental sync; embedder back-off; RRF merge | 250 |
+| 17 | [brain/tools.py](../../escanor/brain/tools.py), [brain/embeddings.py](../../escanor/brain/embeddings.py) | Brain tools, embedders | facts tools are `affects_prompt`; attached folders fenced ([D18](decision.md#d18-your-own-vault-is-trusted-attached-folders-are-fenced-as-untrusted)) | 300 |
+| 18 | [app.py](../../escanor/app.py) | Puts it all together | which tools and sections are installed | 110 |
+| 19 | [cli.py](../../escanor/cli.py) | Terminal chat | `StdinLines` ([B8](bugs.md)); Ctrl-C cancels only the turn | 270 |
+| 20 | [tests/](../../tests/) | 122 offline tests | error paths, not just happy paths | — |
 
 Skip or skim: [telemetry.py](../../escanor/telemetry.py) (copied, path renamed),
 [assistant/web_search.py](../../escanor/assistant/web_search.py) (copied DuckDuckGo scraper).
@@ -114,4 +117,6 @@ text so the model treats it as data.
 ```
 
 Then, with a key: "what's the time?", "search the web for Kokoro TTS", "read https://example.com",
-"teach me how attention works in transformers" (loads learn-anything), "switch to sonnet".
+"teach me how attention works in transformers" (loads learn-anything), "switch to sonnet",
+"remember that I prefer window seats" then `/new` and "which seat do I like?".
+For semantic search: `brew install ollama && ollama pull nomic-embed-text`.

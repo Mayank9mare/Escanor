@@ -3,14 +3,15 @@ import os
 import sys
 import pytest
 from escanor import config
+from escanor.app import build_app
 from escanor.cli import Repl, StdinLines, build_model, main
-from escanor.core.agent import Agent
 
 
 def _repl(store):
     settings = config.load_settings()
+    settings["brain"]["embedder"] = "none"
     model, spec = build_model("mock", settings)
-    return Repl(Agent(model, spec), store, store.create(), settings)
+    return Repl(build_app(settings, model, spec), store, store.create())
 
 
 def test_should_switch_model_when_alias_valid(store):

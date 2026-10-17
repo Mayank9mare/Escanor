@@ -10,6 +10,7 @@ Commands:
   /new            start a new conversation
   /skills         list the skills Escanor can load
   /tools          list tool groups and whether they're on
+  /brain          re-index the second brain and show its size
   /help           show commands
   /quit           exit (Ctrl-D works too)
 
@@ -23,12 +24,10 @@ import os
 import signal
 import sys
 from . import config
-from .app import build_agent, build_model
-from .core.agent import Agent
+from .app import Escanor, build_app, build_model
 from .core.events import Error, ModelSwitched, TextDelta, ToolFinished, ToolStarted, TurnDone
 from .core.session import Session, SessionStore, default_store
 from .models.base import ToolCall
-from .skills.loader import Skill
 
 _TTY = sys.stdout.isatty()
 
@@ -117,13 +116,13 @@ class TerminalConfirmer:
 
 
 class Repl:
-    def __init__(self, agent: Agent, store: SessionStore, session: Session, settings: dict,
-                 skills: dict[str, Skill] | None = None):
-        self.agent = agent
-        self.skills = skills or {}
+    def __init__(self, app: Escanor, store: SessionStore, session: Session):
+        self.app = app
+        self.agent = app.agent
+        self.skills = app.skills
+        self.settings = app.settings
         self.store = store
         self.session = session
-        self.settings = settings
         self.lines = StdinLines()
         self.confirmer = TerminalConfirmer(self.lines)
 
@@ -159,6 +158,12 @@ class Repl:
                 print("  No skills found. Check [skills] dirs/allow in ~/.escanor/config.toml.")
             for skill in self.skills.values():
                 print(f"  {skill.name:<16} {skill.description[:90]}")
+        elif command == "brain":
+            counts = self.app.index.sync()
+            stats = self.app.index.stats()
+            print(f"  {self.app.vault.root} · {stats['files']} notes, {stats['chunks']} chunks, "
+                  f"{stats['embedded']} embedded ({self.app.index.embedder.name}) · "
+                  f"{len(self.app.vault.facts())} facts · {counts['changed']} re-indexed")
         elif command == "tools":
             enabled = self.agent.tools.enabled_groups()
             for group, names in self.agent.tools.groups().items():
@@ -252,9 +257,9 @@ def main(argv: list[str] | None = None) -> int:
     store = default_store()
     latest = store.latest_id() if args.resume else None
     session = store.load(latest) if latest is not None else store.create()
-    agent, skills = build_agent(settings, model, spec)
+    app = build_app(settings, model, spec)
     try:
-        asyncio.run(Repl(agent, store, session, settings, skills).loop())
+        asyncio.run(Repl(app, store, session).loop())
     except KeyboardInterrupt:
         print()
     return 0

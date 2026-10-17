@@ -1,7 +1,7 @@
 # Escanor core — Flow
 
 How the core works at runtime: where execution starts, every function on the path, every way a
-turn can end, and the low-level design underneath. Last synced: 2026-10-17, Phase 2 complete.
+turn can end, and the low-level design underneath. Last synced: 2026-10-17, Phase 3 complete.
 
 ## 1. In one paragraph
 
@@ -55,7 +55,7 @@ flowchart LR
       2. [Session.collapse_tool_history](../../escanor/core/session.py#L160): **rewrites** other models' tool turns (only after a switch)
       3. [Session.append_user](../../escanor/core/session.py#L131): **writes** your message
       4. loop up to `max_steps`:
-         1. [PromptBuilder.build](../../escanor/core/prompts.py): persona + date + untrusted rules + skills index, then history
+         1. [PromptBuilder.build](../../escanor/core/prompts.py): persona + date + untrusted rules + brain guidance + facts.md + skills index, then history
          2. [astream](../../escanor/core/agent.py#L60)(`model.chat_stream_tools`, enabled tool schemas): **calls** the provider on a worker thread; yields `TextDelta`s
          3. [Session.append_assistant](../../escanor/core/session.py#L137): **writes** text, tool calls, raw blocks, model spec
          4. no tool calls → `TurnDone` (X1)
@@ -71,6 +71,7 @@ flowchart LR
 ### Tool internals
 
 - [WebFetchTool.run](../../escanor/assistant/web.py#L188) → [fetch_text](../../escanor/assistant/web.py#L130) → [check_url](../../escanor/assistant/web.py#L49) (scheme, resolve, refuse non-global) → urllib with [_CheckingRedirects](../../escanor/assistant/web.py#L68) → HTML to text → page of 12k chars with a `start=` hint
+- [BrainSearchTool.run](../../escanor/brain/tools.py) → [BrainIndex.search](../../escanor/brain/index.py) → `sync()` (re-chunk changed files, embed missing chunks unless the embedder is backing off) → FTS5 bm25 top-20 + cosine top-20 → reciprocal-rank fusion → top 5
 - [UseSkillTool.run](../../escanor/skills/tools.py) → `Skill.body()` + file list; [ReadSkillFileTool](../../escanor/skills/tools.py) → [Skill.read](../../escanor/skills/loader.py#L45) (confined to the skill folder)
 
 ## 5. Exits
@@ -103,12 +104,21 @@ flowchart LR
 | [tools/system_tools.py](../../escanor/tools/system_tools.py) | `get_time`, `enable_tools`, `switch_model` | registry, agent |
 | [assistant/web.py](../../escanor/assistant/web.py) | `web_search`, `web_fetch` (+ address checks) | urllib, DuckDuckGo |
 | [skills/](../../escanor/skills/) | SKILL.md discovery, index section, `use_skill`, `read_skill_file` | filesystem |
+| [brain/vault.py](../../escanor/brain/vault.py) | Markdown notes + facts.md, path confinement, backups | filesystem |
+| [brain/index.py](../../escanor/brain/index.py) | Heading chunks, FTS5 + numpy cosine, RRF merge, incremental sync | SQLite, numpy, embedder |
+| [brain/embeddings.py](../../escanor/brain/embeddings.py) | Ollama `nomic-embed-text`, hash, none | Ollama HTTP |
+| [brain/tools.py](../../escanor/brain/tools.py) | The seven brain tools + brain guidance prompt | vault, index |
 | [models/](../../escanor/models/) | Provider-neutral `Model` + four providers + mock | SDKs / urllib |
 
-### Tool catalogue (Phase 2)
+### Tool catalogue
 
 | Tool | Group | side_effect | untrusted_output |
 |---|---|---|---|
+| `brain_search` | core | read | no (attached folders fenced inside result, D18) |
+| `brain_read` | core | read | no |
+| `remember_fact` | core | write, **affects_prompt** | no |
+| `brain_write`, `brain_append`, `brain_list` | brain | write / read | no |
+| `forget_fact` | brain | write, **affects_prompt** | no |
 | `get_time` | core | read | no |
 | `web_search` | core | read | **yes** |
 | `web_fetch` | core | read | **yes** |
@@ -142,6 +152,9 @@ flowchart TD
 | `~/.escanor/escanor.db` | `conversations` | `id, title, created_at` | title = first 60 chars of first message |
 | | `messages` | `conversation_id, body (JSON), created_at` | body = one message dict ([D10](decision.md#d10-store-each-message-as-one-json-body-in-sqlite)) |
 | `~/.escanor/telemetry.db` | `calls` | one row per model call | copied from kmare-code ([B9](bugs.md)) |
+| `~/.escanor/brain/` | `*.md` | your notes + `facts.md` | plain files, editable anywhere |
+| `~/.escanor/brain-history/` | `<path>.<timestamp>.md` | previous versions | written before replace / forget (D17) |
+| `~/.escanor/brain-index.db` | `files`, `chunks`, `chunks_fts` | mtime+hash per file; heading, text, vector per chunk | rebuilt from the notes at any time |
 
 ### Config & flags
 
@@ -153,5 +166,7 @@ flowchart TD
 | `[agent] max_steps` | `8` | tool rounds per turn (X5) |
 | `[skills] dirs` | `~/.escanor/skills`, `~/projects/mayank-awesome-skills` | where SKILL.md folders are found |
 | `[skills] allow` | `learn-anything`, `grill-me` | which skills are offered |
+| `[brain] embedder` | `ollama` | `ollama` / `hash` / `none`; falls back to keywords when Ollama is down |
+| `[brain] extra_dirs` | `[]` | read-only folders to search (e.g. Obsidian) |
 | `[web] allow_private_hosts` | `false` | X9 off when true ([D12](decision.md#d12-web_fetch-refuses-local-and-private-addresses-re-checked-on-every-redirect)) |
 | `ESCANOR_HOME` | `~/.escanor` | data directory |

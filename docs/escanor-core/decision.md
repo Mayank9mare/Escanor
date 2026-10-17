@@ -24,6 +24,10 @@ what we're trading away. Newest at the bottom. Reversed decisions are marked **S
 | D14 | Tool groups exist now, though only `core` has tools | Accepted | 2026-10-17 |
 | D15 | `set_timer` moves from Phase 2 to Phase 6 | Accepted | 2026-10-17 |
 | D16 | Untrusted taint is computed from the session, per turn | Accepted | 2026-10-17 |
+| D17 | Brain writes need no confirmation; overwrites are backed up instead | Accepted | 2026-10-17 |
+| D18 | Your own vault is trusted; attached folders are fenced as untrusted | Accepted | 2026-10-17 |
+| D19 | Brain tools split: search/read/remember in core, editing in a `brain` group | Accepted | 2026-10-17 |
+| D20 | facts.md is a plain bullet list, newest kept when over the prompt budget | Accepted | 2026-10-17 |
 
 ---
 
@@ -394,3 +398,83 @@ A. Added to Phase 6 in [IMPLEMENTATION_PLAN.md](../../IMPLEMENTATION_PLAN.md).
 
 ### Decision
 A ([permissions.py#L66-L76](../../escanor/tools/permissions.py#L66-L77)).
+
+---
+
+## D17. Brain writes need no confirmation; overwrites are backed up instead
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 3
+
+### Context
+Escanor writes notes, appends to the journal and replaces notes. Asking "Allow?" for each one would
+make note-taking tedious, especially by voice.
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. `write` level (no prompt) + copy the old version to `~/.escanor/brain-history/` before any replace or fact removal** | Fluid note-taking; nothing is ever lost | History folder grows (text, tiny) |
+| B. Confirm every overwrite | Explicit | Constant prompts; voice-hostile |
+| C. Git-commit the vault on each change | Full history, diffable | Needs git; slower; noisy history |
+
+### Decision
+A ([vault.py `_backup`](../../escanor/brain/vault.py)). Creating a note never overwrites one unless `overwrite=true`.
+
+### Revisit if
+You want a browsable history → C in Phase 8 (the plan already lists git backup of the brain).
+
+---
+
+## D18. Your own vault is trusted; attached folders are fenced as untrusted
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 3
+
+### Context
+`[brain] extra_dirs` can attach an existing Obsidian vault read-only. Such notes may contain pasted
+web pages or shared documents.
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. Fence hits from attached folders inside the `brain_search` result** | Imported text can't instruct the model | Doesn't taint the turn for `remember_fact` (the gate keys on tool type, not content) |
+| B. Treat all brain content as untrusted | Uniform | Every personal question would make `remember_fact` ask for confirmation |
+| C. Split into two search tools | Taint works exactly | Model must choose between two near-identical tools |
+
+### Decision
+A ([tools.py `BrainSearchTool`](../../escanor/brain/tools.py)).
+
+### Trade-offs accepted
+- An attached note saying "remember X" is fenced as data but wouldn't trigger the confirmation rule. The fence instruction is the defence there.
+
+---
+
+## D19. Brain tools split: search/read/remember in core, editing in a `brain` group
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 3
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. `brain_search`, `brain_read`, `remember_fact` always on; `brain_write`, `brain_append`, `brain_list`, `forget_fact` via `enable_tools("brain")`** | Personal questions and remembering work with no extra step; core stays at 10 tools | Writing a note costs one `enable_tools` call |
+| B. All seven in core | No extra step | 14 core tools before music/assistant arrive |
+
+### Decision
+A. The skill runtime note tells skills like learn-anything to enable the group before saving.
+
+---
+
+## D20. facts.md is a plain bullet list, newest kept when over the prompt budget
+
+**Status:** Accepted · **Date:** 2026-10-17 · **Phase:** 3
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. `- fact  _(added date)_` lines in Markdown; prompt gets the newest that fit in ~6000 chars** | You can edit it by hand; dated; bounded prompt cost | Oldest facts silently drop out of the prompt once you have hundreds (still searchable) |
+| B. JSON store with categories | Structured | Not hand-editable; overkill now |
+
+### Decision
+A ([vault.py `facts_section`](../../escanor/brain/vault.py)). Facts change rarely, so the prompt cache survives most turns.

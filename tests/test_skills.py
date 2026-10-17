@@ -1,6 +1,6 @@
 import pytest
 from escanor import config
-from escanor.app import build_agent, build_model
+from escanor.app import build_app, build_model
 from escanor.core.events import ToolFinished, TurnDone
 from escanor.models.base import ModelResponse, ToolCall
 from escanor.models.mock_provider import MockModel
@@ -79,8 +79,10 @@ def test_should_list_name_and_description_when_building_index(skills_dir):
 async def test_should_load_skill_through_agent_when_model_asks(skills_dir, store):
     settings = config.load_settings()
     settings["skills"] = {"dirs": [str(skills_dir)], "allow": ["learn-anything"]}
+    settings["brain"]["embedder"] = "none"
     model, spec = build_model("mock", settings)
-    agent, skills = build_agent(settings, model, spec)
+    app = build_app(settings, model, spec)
+    agent, skills = app.agent, app.skills
     scripted = MockModel(script=[
         ModelResponse(tool_calls=[ToolCall("c1", "use_skill", {"name": "learn-anything"})]),
         ModelResponse(text="Let's begin. What do you already know?"),

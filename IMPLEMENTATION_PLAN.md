@@ -262,16 +262,16 @@ Prove the three risky external pieces before building on them.
 **Done when:** "what's the latest on <topic>?" triggers web_search → answer with sources; "teach me how transformers work" loads learn-anything and starts a Socratic session.
 **Tests:** agent loop with scripted mock model (0, 1, multi-step tool calls; MAX_STEPS); permission gate blocks `external` without confirm; OpenAI tool-call delta accumulation from recorded chunks; skill loader frontmatter parsing; switching Haiku → Gemini after a tool-using turn sends collapsed history (no foreign tool-call blocks); cancelling a turn mid-stream leaves a consistent session; tool groups keep schemas ≤15.
 
-### Phase 3 — Second brain (2–3 days)
-- [ ] `brain/vault.py`: create layout, safe paths (no escaping the vault), frontmatter (`tags`, `created`, `updated`).
-- [ ] `brain/embeddings.py`: Ollama `nomic-embed-text` (port kmare's), mock embedder; if Ollama is down → keyword-only search.
-- [ ] `brain/index.py`: chunk by heading (~400 tokens, overlap 50), store in `index.db`: FTS5 for keywords,
+### Phase 3 — Second brain (2–3 days) ✅ done 2026-10-17
+- [x] `brain/vault.py`: create layout, safe paths (no escaping the vault), frontmatter (`tags`, `created`, `updated`).
+- [x] `brain/embeddings.py`: Ollama `nomic-embed-text` (port kmare's), mock embedder; if Ollama is down → keyword-only search.
+- [x] `brain/index.py`: chunk by heading (~400 tokens, overlap 50), store in `index.db`: FTS5 for keywords,
       embeddings as float32 blobs searched with a numpy brute-force cosine (milliseconds at personal-vault
       scale, <50k chunks; avoids `sqlite-vec`'s loadable-extension requirement, which some macOS Python
       builds disable). Move to sqlite-vec only if the vault outgrows it. Hybrid score (BM25 + cosine, reciprocal-rank fusion); incremental reindex on mtime/hash; `escanor brain reindex`.
-- [ ] `brain/tools.py`: search (returns path + heading + snippet), read, write, append (journal), `remember_fact`/`forget_fact` editing `facts.md`.
-- [ ] `prompts.py` injects `facts.md` (capped ~1.5k tokens) every turn; instructs "search the brain before answering personal questions; cite note paths".
-- [ ] Optional import: point at an existing Obsidian vault folder (read-only) via `BRAIN_EXTRA_DIRS`.
+- [x] `brain/tools.py`: search (returns path + heading + snippet), read, write, append (journal), `remember_fact`/`forget_fact` editing `facts.md`.
+- [x] `prompts.py` injects `facts.md` (capped ~1.5k tokens) every turn; instructs "search the brain before answering personal questions; cite note paths".
+- [x] Optional import: point at an existing Obsidian vault folder (read-only) via `[brain] extra_dirs` in config.toml.
 
 **Done when:** "remember that I prefer window seats" → in facts.md; next session "which seat do I like on flights?" answers from memory; "what did I write about project X?" cites notes.
 **Tests:** chunker on fixture notes; hybrid ranking on a small fixture vault; path-traversal rejection; incremental reindex only touches changed files; `remember_fact` after a `web_fetch` in the same turn requires confirmation.

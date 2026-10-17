@@ -3,7 +3,7 @@ name = "escanor"
 version = "0.1.0"
 description = "A local, Jarvis-style personal assistant: second brain, research tutor, AI DJ, voice."
 requires-python = ">=3.12,<3.14"
-dependencies = []
+dependencies = ["numpy>=1.26"]
 
 [project.optional-dependencies]
 anthropic = ["anthropic>=0.60"]

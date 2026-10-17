@@ -58,6 +58,14 @@ DEFAULTS: dict[str, Any] = {
         # "kb" is deliberately absent: it would keep a second notes store.
         "allow": ["learn-anything", "grill-me"],
     },
+    "brain": {
+        # "ollama" (local semantic search; needs `ollama pull nomic-embed-text`),
+        # "none" (keyword search only) or "hash" (crude, offline).
+        "embedder": "ollama",
+        "embed_model": "nomic-embed-text",
+        # Folders to search read-only, e.g. an existing Obsidian vault.
+        "extra_dirs": [],
+    },
     "web": {
         # web_fetch refuses localhost / private-network addresses unless true.
         "allow_private_hosts": False,
