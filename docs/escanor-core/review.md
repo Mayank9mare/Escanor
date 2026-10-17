@@ -1,7 +1,7 @@
 # Escanor core — Review Guide
 
 **Branch:** `main` · **Scope:** Phases 1–8, the whole implementation plan ·
-**Tests:** 232 passing · **Updated:** 2026-10-17
+**Tests:** 233 passing · **Live:** Gemini 10/10 tool choice · **Updated:** 2026-10-17
 
 ## TL;DR (read this first)
 
@@ -152,6 +152,11 @@ dates are built from numbers so your region settings can't scramble them.
 | B6 | LOW | Cancelled turn holds its stream until the next chunk | No (deferred) |
 | B10 | LOW | Model-switch collapse resets message timestamps | No |
 | — | — | Not yet run live: Claude (no key), YouTube Music app, Apple permissions, mic/wake word | Needs you |
+
+**Live on Gemini (2026-10-17, kmare-code's key):** multi-step tool turns with `thought_signature` round-trips
+(get_time, remember_fact, web_search) worked in chat; `escanor eval` scored 6/6 on gemini-3.6-flash before its
+free-tier cap (20 requests/day/model), and the remaining 4/4 on gemini-3.5-flash-lite; a saved fact was recalled
+in a new conversation from facts.md without a tool call.
 
 ## Not verified yet (needs you)
 

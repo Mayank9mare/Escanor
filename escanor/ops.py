@@ -22,7 +22,8 @@ from datetime import datetime
 from pathlib import Path
 from . import config
 from .core.agent import Agent
-from .core.events import ToolStarted
+import asyncio
+from .core.events import Error, ToolStarted
 from .core.session import SessionStore
 from .models.base import ToolCall
 from .tools.base import ToolResult
@@ -126,16 +127,29 @@ class StubGate:
         return ToolResult(ok=True, output=f"(eval stub) {call.name} done.")
 
 
-async def run_eval(agent: Agent, store: SessionStore, cases: list[EvalCase] = CASES) -> list[tuple[EvalCase, list[str], bool]]:
+async def run_eval(agent: Agent, store: SessionStore, cases: list[EvalCase] = CASES,
+                   delay: float = 0.0) -> list[tuple[EvalCase, list[str], bool | None]]:
+    """Grade each case: True/False, or None when the turn errored (rate limit,
+    network) -- an error says nothing about tool choice, so it isn't a FAIL (B16).
+    `delay` seconds between cases keeps free tiers under their per-minute quota."""
     results = []
-    for case in cases:
+    for i, case in enumerate(cases):
+        if i and delay:
+            await asyncio.sleep(delay)
         gate = StubGate()
         agent.gate = gate
         agent.tools.reset()
         called: list[str] = []
+        errored = False
         async for event in agent.run_turn(store.create(), case.prompt):
             if isinstance(event, ToolStarted):
                 called.append(event.call.name)
+            elif isinstance(event, Error) and not called:
+                errored = True
+                called.append(f"error: {event.message[:80]}")
+        if errored:
+            results.append((case, called, None))
+            continue
         passed = (not called) if not case.expect else any(name in called for name in case.expect)
         results.append((case, called, passed))
     return results

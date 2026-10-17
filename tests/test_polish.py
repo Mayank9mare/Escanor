@@ -175,3 +175,11 @@ def test_eval_cases_cover_each_capability():
     expected = {name for case in CASES for name in case.expect}
     assert {"get_time", "web_search", "remember_fact", "brain_search", "set_timer", "morning_briefing",
             "use_skill", "research_ingest"} <= expected
+
+
+async def test_eval_marks_errors_instead_of_failing(store):
+    class Failing(MockModel):
+        def chat(self, messages, tools=None):
+            raise RuntimeError("429 quota")
+    results = await run_eval(Agent(Failing(), "mock:m"), store, [EvalCase("what time is it?", ("get_time",))])
+    assert results[0][2] is None and results[0][1][0].startswith("error: 429")

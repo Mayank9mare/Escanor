@@ -243,19 +243,21 @@ class Repl:
             await self.run_turn_interruptible(line)
 
 
-def eval_command(app: Escanor) -> int:
+def eval_command(app: Escanor, delay: float = 0.0) -> int:
     import tempfile
     from .core.session import SessionStore
     from .ops import run_eval
     print(f"Evaluating tool choice on {app.agent.model_spec} (stubbed tools; real model calls)…")
     with tempfile.TemporaryDirectory() as scratch:
-        results = asyncio.run(run_eval(app.agent, SessionStore(Path(scratch) / "eval.db")))
+        results = asyncio.run(run_eval(app.agent, SessionStore(Path(scratch) / "eval.db"), delay=delay))
     for case, called, passed in results:
         expected = " or ".join(case.expect) or "no tool"
-        print(f"{'PASS' if passed else 'FAIL'}  {case.prompt[:50]:<50}  expected {expected}; called {', '.join(called) or 'nothing'}")
-    score = sum(p for _, _, p in results)
-    print(f"{score}/{len(results)} passed")
-    return 0 if score == len(results) else 1
+        label = "ERROR" if passed is None else ("PASS" if passed else "FAIL")
+        print(f"{label:<5}  {case.prompt[:50]:<50}  expected {expected}; called {', '.join(called) or 'nothing'}")
+    graded = [p for _, _, p in results if p is not None]
+    errors = len(results) - len(graded)
+    print(f"{sum(graded)}/{len(graded)} passed" + (f", {errors} errored (not graded; try --delay)" if errors else ""))
+    return 0 if graded and all(graded) and not errors else 1
 
 
 def usage_command(settings: dict, days: int) -> int:
@@ -333,7 +335,8 @@ def main(argv: list[str] | None = None) -> int:
     brain_cmd.add_argument("action", choices=["reindex", "stats", "backup"])
     service_cmd = sub.add_parser("service", help="start `escanor serve` at login (launchd)")
     service_cmd.add_argument("action", choices=["install", "uninstall", "status"])
-    sub.add_parser("eval", help="check each capability picks the right tool (real model calls)")
+    eval_cmd = sub.add_parser("eval", help="check each capability picks the right tool (real model calls)")
+    eval_cmd.add_argument("--delay", type=float, default=0.0, help="seconds between cases (for rate-limited free tiers)")
     sub.add_parser("brief", help="your morning briefing, then the chat")
     usage_cmd = sub.add_parser("usage", help="model calls, tokens and cost")
     usage_cmd.add_argument("--days", type=int, default=1, help="how many days back (default: today)")
@@ -359,7 +362,7 @@ def main(argv: list[str] | None = None) -> int:
         return service(args.action)
 
     if args.command == "eval":
-        return eval_command(app)
+        return eval_command(app, args.delay)
 
     if args.command == "brain" and args.action == "backup":
         from .ops import backup_brain

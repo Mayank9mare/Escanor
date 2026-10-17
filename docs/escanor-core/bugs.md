@@ -22,6 +22,7 @@ Fixed bugs stay here (struck through) as an audit trail. IDs never get reused.
 | ~~B13~~ | ~~HIGH~~ | ~~No WebSocket support in plain uvicorn~~ | ✅ FIXED | Phase 4 · live browser check | Phase 4 |
 | ~~B14~~ | ~~LOW~~ | ~~arXiv papers saved under their licence notice instead of their title~~ | ✅ FIXED | Phase 7 · live ingest | Phase 7 |
 | ~~B15~~ | ~~MEDIUM~~ | ~~`listen` heard its own chime as speech and ended the turn early~~ | ✅ FIXED | final review pass | Phase 8 |
+| ~~B16~~ | ~~MEDIUM~~ | ~~`escanor eval` graded API errors (e.g. rate limits) as wrong tool choices~~ | ✅ FIXED | live Gemini test | live test |
 
 Severity: **HIGH** = data loss, wrong result, security, blocks testing/release · **MEDIUM** =
 breaks an edge case or error path · **LOW** = minor or cosmetic.
@@ -149,6 +150,16 @@ breaks an edge case or error path · **LOW** = minor or cosmetic.
   then 0.8 s of silence before you start talking ends the utterance → "Didn't catch anything".
 - **Fix:** wait for the chime, drain the mic, then record ([listen.py `ListenLoop.once`](../../escanor/voice/listen.py)).
 - **Regression test:** [test_listen_loop_drops_chime_audio_before_recording](../../tests/test_voice.py)
+
+### ~~B16. `escanor eval` graded API errors as wrong tool choices~~
+
+- **Severity:** MEDIUM · **Found:** 2026-10-17, first live eval on Gemini · **Fixed:** same day
+- **Symptom:** 1/10 with "called nothing" on every case, while the same prompts worked in chat.
+- **Root cause:** the free tier returned 429 (20 requests/day/model for gemini-3.6-flash); `run_eval` ignored
+  `Error` events, so an errored turn looked like "no tool called".
+- **Fix:** errored cases are reported as ERROR and left out of the score; `--delay` paces free tiers
+  ([ops.py `run_eval`](../../escanor/ops.py)).
+- **Regression test:** [test_eval_marks_errors_instead_of_failing](../../tests/test_polish.py)
 
 ---
 

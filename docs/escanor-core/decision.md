@@ -254,6 +254,10 @@ The `gpt` and `gemini` aliases need model ids. I can't check which ids your acco
 ### Decision
 A. Change them in `~/.escanor/config.toml` under `[models.aliases]`.
 
+**Live note (2026-10-17):** `gemini-3.6-flash`'s free tier allows only 20 requests/day; one agent turn
+uses 2–4. `gemini-3.5-flash-lite` passed the remaining eval cases and has its own quota. Consider
+`gemini = "gemini:gemini-3.5-flash-lite"` if you stay on the free tier.
+
 ---
 
 ## D9. No clock time in the system prompt
