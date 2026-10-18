@@ -20,16 +20,19 @@ DEFAULT_WHISPER_MODEL = "base"
 class FasterWhisperEngine(STTEngine):
     name = "faster-whisper"
 
-    def __init__(self, model_name: str = DEFAULT_WHISPER_MODEL):
+    def __init__(self, model_name: str = DEFAULT_WHISPER_MODEL, vocabulary: str = "Escanor"):
         try:
             from faster_whisper import WhisperModel
         except ImportError as e:
             raise RuntimeError("Run `pip install faster-whisper` to use the faster-whisper STT engine.") from e
         self._model = WhisperModel(model_name, device="cpu", compute_type="int8")
+        # Names Whisper doesn't know ("Escanor" came back as "Skinner",
+        # "Eskiner", "Connor"); a short prompt biases it towards the right spelling.
+        self._prompt = f"{vocabulary}." if vocabulary else None
 
     def transcribe(self, wav_bytes: bytes) -> str:
         audio = _wav_bytes_to_float32(wav_bytes)
-        segments, _ = self._model.transcribe(audio, language="en")
+        segments, _ = self._model.transcribe(audio, language="en", initial_prompt=self._prompt)
         return " ".join(s.text.strip() for s in segments).strip()
 
 

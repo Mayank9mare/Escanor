@@ -352,3 +352,43 @@ async def test_audio_out_reports_each_wav_before_playing():
     await audio.say("hello there")
     await audio.close()
     assert played == [b"hello there"]
+
+
+
+# ---------- "hey Escanor" ----------
+
+from escanor.voice.listen import TranscriptWake, match_wake_phrase  # noqa: E402
+
+
+@pytest.mark.parametrize("heard,rest", [
+    ("Hey Escanor.", ""),
+    ("Hey Escanor, what time is it?", "what time is it"),
+    ("Escanor. Play some music.", "play some music"),
+    ("Hey, I'm Skinner.", ""),                         # real Whisper output before the vocabulary hint
+    ("Hey, Eskiner, what time is it?", "what time is it"),
+    ("Eskender, play some music.", "play some music"),
+    ("hey es canor good morning", "good morning"),       # split by the transcriber
+    ("Hello there! How are you?", None),
+    ("I scan the document.", None),
+    ("Tell Skinner I set high.", None),                 # the name not at the start
+    ("", None),
+])
+def test_wake_phrase_matching(heard, rest):
+    assert match_wake_phrase(heard) == rest
+
+
+async def test_transcript_wake_answers_question_said_in_the_same_breath():
+    frames = _frames("..." + "s" * 8 + "." * 10 + "..." + "s" * 8 + "." * 10)
+    transcripts = iter(["Hello there.", "Hey Escanor, what time is it?"])
+    answered = []
+
+    async def respond(text):
+        answered.append(text)
+
+    audio = AudioOut(_tts, NullPlayer())
+    loop = ListenLoop(_aiter(frames), EnergyVAD(), TranscriptWake("hey escanor"),
+                      lambda wav: next(transcripts), respond, audio)
+    loop.chime_seconds = 0
+    assert await loop.once() == "what time is it"
+    assert answered == ["what time is it"]
+    await audio.close()

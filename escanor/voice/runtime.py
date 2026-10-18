@@ -5,7 +5,7 @@ Starting the voice side of Escanor: building the speech engines from
 [voice] settings, and the two voice entry points --
 
   escanor serve    web UI (text + push-to-talk) at http://127.0.0.1:8770
-  escanor listen   hands-free: wake word -> speak -> answer aloud
+  escanor listen   hands-free: "hey Escanor" -> speak -> answer aloud
 """
 from __future__ import annotations
 import asyncio
@@ -32,6 +32,7 @@ def build_speech(settings: dict) -> SpeechEngine:
     return SpeechEngine(
         stt_engine=voice["stt"], tts_engine=voice["tts"],
         whisper_model=voice.get("whisper_model") or None, tts_voice=voice.get("tts_voice") or None,
+        tts_speed=float(voice.get("tts_speed", 1.0)),
     )
 
 
@@ -62,18 +63,22 @@ def serve(app: Escanor, store: SessionStore, speech: SpeechEngine | None, mute: 
 
 def listen(app: Escanor, store: SessionStore, speech: SpeechEngine, use_enter: bool = False) -> None:
     from .conversation import VoiceConfirmer, speak_turn
-    from .listen import EnergyVAD, ListenLoop, MicFrames, OpenWakeWord
+    from .listen import EnergyVAD, ListenLoop, MicFrames, OpenWakeWord, TranscriptWake
 
     async def main() -> None:
         audio = AudioOut(speech.synthesize, AfplayPlayer(), ducker=app.services.get("ducker"))
         attach_dj_voice(app, audio)
         frames = MicFrames()
         wake = None
+        wake_word = app.settings["voice"]["wake_word"].strip()
         if not use_enter:
-            try:
-                wake = OpenWakeWord(app.settings["voice"]["wake_word"])
-            except RuntimeError as e:
-                print(f"{e}\nFalling back to: press Enter, then speak.", file=sys.stderr)
+            if " " in wake_word:          # a phrase: transcript-based, any words work
+                wake = TranscriptWake(wake_word)
+            else:                         # an openWakeWord model such as hey_jarvis
+                try:
+                    wake = OpenWakeWord(wake_word)
+                except RuntimeError as e:
+                    print(f"{e}\nFalling back to: press Enter, then speak.", file=sys.stderr)
 
         async def wait_enter() -> None:
             await asyncio.to_thread(sys.stdin.readline)
@@ -101,6 +106,7 @@ def listen(app: Escanor, store: SessionStore, speech: SpeechEngine, use_enter: b
             frames, EnergyVAD(), wake, speech.transcribe, respond, audio,
             barge_in=app.settings["voice"]["barge_in"] == "headphones",
             wait_enter=wait_enter, on_status=lambda s: print(f"· {s}", flush=True),
+            wake_label=wake_word.replace("_", " ").title(),
         )
         print(f"Escanor is listening ({app.agent.model_spec}). Ctrl-C to stop.")
         await app.start()

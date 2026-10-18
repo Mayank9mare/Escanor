@@ -13,14 +13,14 @@ from .base import TTSEngine
 _ENGINES = ("mock", "piper", "elevenlabs", "sarvam")
 
 
-def get_tts_engine(name: str, voice: str | None = None) -> TTSEngine:
+def get_tts_engine(name: str, voice: str | None = None, speed: float = 1.0) -> TTSEngine:
     if name == "mock":
         from .mock_engine import MockTTSEngine
         return MockTTSEngine()
 
     if name == "piper":
         from .piper_engine import DEFAULT_PIPER_VOICE, PiperEngine
-        return PiperEngine(voice or DEFAULT_PIPER_VOICE)
+        return PiperEngine(voice or DEFAULT_PIPER_VOICE, length_scale=speed)
 
     if name == "elevenlabs":
         # UNVERIFIED -- built without ElevenLabs credentials to test

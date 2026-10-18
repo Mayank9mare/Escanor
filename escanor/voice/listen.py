@@ -19,6 +19,7 @@ audio. MicFrames is the real microphone (sounddevice).
 from __future__ import annotations
 import asyncio
 import io
+import re
 import logging
 import subprocess
 import wave
@@ -84,6 +85,77 @@ class OpenWakeWord:
             self._model.reset()
             return True
         return False
+
+
+def _similar(a: str, b: str) -> float:
+    from difflib import SequenceMatcher
+    return SequenceMatcher(None, a, b).ratio()
+
+
+def _sound(word: str) -> str:
+    """A rough consonant skeleton: escanor, eskiner, skinner -> 'sknr'."""
+    word = word.lower().replace("c", "k").replace("ck", "k").replace("q", "k").replace("z", "s")
+    word = re.sub(r"[aeiouyh']", "", word)
+    return re.sub(r"(.)\1+", r"\1", word)
+
+
+def _sounds_like(heard: str, name: str, threshold: float) -> bool:
+    if _similar(heard, name) >= threshold:
+        return True
+    a, b = _sound(heard), _sound(name)
+    if len(a) < 3:
+        return False
+    if a == b:
+        return True
+    # near-misses only for full-length shapes ("skndr" ~ "sknr"); "skn" (scan) is too short to count
+    return len(a) >= len(b) and _similar(a, b) >= 0.85
+
+
+FILLERS = {"hey", "hi", "hello", "ok", "okay", "yo", "a", "hay", "he", "uh", "um", "oh", "i'm", "im", "and", "so"}
+
+
+def match_wake_phrase(text: str, phrase: str = "hey escanor", threshold: float = 0.72) -> str | None:
+    """If `text` starts with the wake phrase (allowing for how speech-to-text
+    mangles a name: "Hey, Eskiner", "Hey, I'm Skinner", "Eskender"), return
+    what was said after it ("" for just the phrase). None if it isn't there.
+
+    The name must come within the first three words, after nothing but a
+    greeting or filler, so "I scanned it" or "tell Skinner" doesn't wake it."""
+    words = re.findall(r"[a-z0-9']+", text.lower())
+    name = phrase.lower().split()[-1]                    # "escanor"
+    for i, word in enumerate(words[:3]):
+        if not set(words[:i]) <= FILLERS:
+            return None                                   # something else came first
+        for used in (1, 2, 3):                            # "es canor" split by the transcriber
+            if i + used > len(words):
+                break
+            if _sounds_like("".join(words[i:i + used]), name, threshold):
+                return " ".join(words[i + used:])
+    return None
+
+
+class TranscriptWake:
+    """A wake phrase spotted by transcribing short bursts of speech with the
+    same Whisper used for questions -- any phrase works, no model training.
+    Silence costs nothing: only speech (per the VAD) is transcribed."""
+
+    def __init__(self, phrase: str = "hey escanor"):
+        self.phrase = phrase
+
+    async def wait(self, frames: AsyncIterator[np.ndarray], vad: VAD, transcribe: Callable[[bytes], str],
+                   on_heard: Callable[[str], None] | None = None) -> str:
+        """Block until the phrase is heard; return anything said after it."""
+        burst = UtteranceSettings(start_timeout=3600.0, end_silence=0.6, max_seconds=12.0)
+        while True:
+            utterance = await record_utterance(frames, vad, burst)
+            if not utterance:
+                continue
+            text = (await asyncio.to_thread(transcribe, to_wav(utterance))).strip()
+            rest = match_wake_phrase(text, self.phrase)
+            if rest is not None:
+                return rest
+            if on_heard and text:
+                on_heard(text)
 
 
 def to_wav(frames: list[np.ndarray], rate: int = RATE) -> bytes:
@@ -204,7 +276,8 @@ class ListenLoop:
     def __init__(self, frames: AsyncIterator[np.ndarray], vad: VAD, wake: WakeWord | None,
                  transcribe: Callable[[bytes], str], respond: Callable[[str], Awaitable[None]],
                  audio, barge_in: bool = False, wait_enter: Callable[[], Awaitable[None]] | None = None,
-                 on_status: Callable[[str], None] | None = None, settings: UtteranceSettings | None = None):
+                 on_status: Callable[[str], None] | None = None, settings: UtteranceSettings | None = None,
+                 wake_label: str = "hey Escanor"):
         self._frames = frames
         self._vad = vad
         self._wake = wake
@@ -216,18 +289,24 @@ class ListenLoop:
         self._status = on_status or (lambda s: None)
         self._settings = settings
         self.chime_seconds = 0.35
+        self._wake_label = wake_label
 
-    async def wait_for_wake(self) -> None:
+    async def wait_for_wake(self) -> str:
+        """Wait for the wake word. Returns anything said in the same breath
+        ("hey Escanor, what time is it?" -> "what time is it"), else ""."""
         if self._wake is None:
             if self._wait_enter is None:
                 raise RuntimeError("No wake word engine and no Enter key handler.")
             self._status("Press Enter and speak.")
             await self._wait_enter()
-            return
-        self._status("Say 'hey Jarvis'.")
+            return ""
+        self._status(f"Say '{self._wake_label}'.")
+        if isinstance(self._wake, TranscriptWake):
+            return await self._wake.wait(self._frames, self._vad, self._transcribe)
         async for frame in self._frames:
             if self._wake.detected(frame):
-                return
+                return ""
+        return ""
 
     async def hear(self) -> str:
         """Record one utterance and transcribe it ('' if nothing was said)."""
@@ -244,7 +323,9 @@ class ListenLoop:
 
     async def once(self) -> str:
         """One wake → hear → respond cycle. Returns what was heard."""
-        await self.wait_for_wake()
+        said_with_wake = await self.wait_for_wake()
+        if len(said_with_wake.split()) >= 2:   # the question came in the same breath
+            return await self._answer(said_with_wake)
         chime()
         # Let the chime finish and drop what the mic heard of it: otherwise it
         # counts as the start of speech, and 0.8 s of silence before you
@@ -257,6 +338,9 @@ class ListenLoop:
         if not text:
             self._status("Didn't catch anything.")
             return ""
+        return await self._answer(text)
+
+    async def _answer(self, text: str) -> str:
         self._status(f"You: {text}")
         turn = asyncio.ensure_future(self._respond(text))
         if self._barge_in:

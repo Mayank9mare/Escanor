@@ -30,9 +30,10 @@ class SpeechEngine:
         tts_engine: str = DEFAULT_TTS_ENGINE,
         whisper_model: str | None = None,
         tts_voice: str | None = None,
+        tts_speed: float = 1.0,
     ):
         self._stt = get_stt_engine(stt_engine, model_name=whisper_model)
-        self._tts = get_tts_engine(tts_engine, voice=tts_voice)
+        self._tts = get_tts_engine(tts_engine, voice=tts_voice, speed=tts_speed)
 
     def transcribe(self, wav_bytes: bytes) -> str:
         """Turn recorded audio (a WAV file's raw bytes) into text."""

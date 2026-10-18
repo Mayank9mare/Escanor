@@ -26,7 +26,7 @@ escanor › In plain words: attention lets every word look at every other word�
 | **Chat & models** | "switch to sonnet", "think hard about…" | Claude Haiku by default; Sonnet, GPT, Gemini, Ollama; switch any time, mid-conversation |
 | **Second brain** | "what did I write about project X?", "remember that…" | Markdown notes in `~/.escanor/brain`, keyword + semantic search, a `facts.md` it always keeps in mind |
 | **Web & news** | "what's in the news?", "latest on…?", "read this link" | Google News headlines, DuckDuckGo search, page reading; web text is treated as data, never instructions |
-| **Voice** | hold the mic, or say "hey Jarvis" | Whisper (speech-to-text) and Piper (voice), both local; replies spoken sentence by sentence |
+| **Voice** | hold the mic, or say "hey Escanor" | Whisper (speech-to-text) and Piper (voice), both local; replies spoken sentence by sentence |
 | **AI DJ** | "DJ mode, chill evening", "skip", "who is this?" | YouTube Music desktop app + your history and likes; short spoken intros between songs |
 | **Assistant** | "remind me to call mom at 7", "what's on today?", "good morning" | Apple Reminders and Calendar, timers, notifications, morning briefing |
 | **Research tutor** | "explain this paper <arXiv / link / PDF>" | Saves it to the brain, then teaches with the [learn-anything](https://github.com/Mayank9mare/mayank-awesome-skills) skill, with spaced review |
@@ -44,7 +44,7 @@ Already installed? Then it's one command:
 ```bash
 escanor          # chat in the terminal
 escanor serve    # the HUD in your browser at http://127.0.0.1:8770: hold Space (or the mic) to talk
-escanor listen   # hands-free: say "hey Jarvis"
+escanor listen   # hands-free: say "hey Escanor"
 escanor brief    # morning briefing, then chat
 ```
 
@@ -86,8 +86,13 @@ uv pip install -e ".[voice,server]"
 .venv/bin/escanor serve     # web UI at http://127.0.0.1:8770, hold the mic (or Space) to talk
 
 uv pip install -e ".[listen]"
-.venv/bin/escanor listen    # hands-free: say "hey Jarvis" (or --enter to press Enter instead)
+.venv/bin/escanor listen    # hands-free: say "hey Escanor" (or --enter to press Enter instead)
 ```
+
+Say **"hey Escanor"**, alone or with your question in the same breath ("hey Escanor, what's the
+time?"). The wake phrase is spotted by Whisper with a hint for the name, so any phrase works:
+`[voice] wake_word = "hey escanor"`. His voice is a deep male Piper voice spoken a touch slowly
+(`tts_voice = "en_US-ryan-high"`, `tts_speed = 1.1`); `en_GB-alan-medium` is a British alternative.
 
 Pressing the mic, or sending a message while Escanor is talking, interrupts it. Talking over it in
 `listen` mode needs headphones (`[voice] barge_in = "headphones"`), otherwise it hears itself.

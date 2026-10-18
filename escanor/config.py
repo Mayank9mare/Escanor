@@ -75,8 +75,11 @@ DEFAULTS: dict[str, Any] = {
         "stt": "faster-whisper",      # faster-whisper (local) | sarvam (cloud) | mock
         "whisper_model": "base",      # tiny | base | small ... (bigger = slower, more accurate)
         "tts": "piper",               # piper (local) | sarvam (cloud, Indian English) | mock
-        "tts_voice": "",              # engine default when empty (piper: en_US-lessac-medium)
-        "wake_word": "hey_jarvis",
+        "tts_voice": "en_US-ryan-high",   # deep male; or en_GB-alan-medium (British male)
+        "tts_speed": 1.1,             # Piper length_scale: >1 slower and weightier
+        # A phrase ("hey escanor": spotted by transcribing speech, any phrase works)
+        # or an openWakeWord model name ("hey_jarvis": a dedicated detector).
+        "wake_word": "hey escanor",
         # "off": no talking over Escanor (safe on laptop speakers).
         # "headphones": interrupt it by talking (needs headphones; see listen.py).
         "barge_in": "off",

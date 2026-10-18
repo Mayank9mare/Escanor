@@ -27,3 +27,4 @@ oauth.json
 
 # Local tool config
 .claude/
+voice-samples/
