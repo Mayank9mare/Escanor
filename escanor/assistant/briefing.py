@@ -14,7 +14,6 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Callable
 from ..tools.base import READ, Tool, ToolResult
-from ..tools.permissions import fence_untrusted
 
 Source = tuple[str, Callable[[], str]]
 
@@ -50,12 +49,6 @@ def due_today_first(reminders: list[dict], today: str) -> str:
         flag = " (overdue)" if due and due[:10] < today else (" (today)" if due[:10] == today else "")
         lines.append(f"- {r['title']}{flag}")
     return "\n".join(lines) or "Nothing open."
-
-
-def weather_source(search: Callable[[str], str], city: str) -> Callable[[], str]:
-    def fetch() -> str:
-        return fence_untrusted("web_search", search(f"weather today {city}")[:1200])
-    return fetch
 
 
 class BriefingTool(Tool):

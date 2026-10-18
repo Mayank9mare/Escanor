@@ -33,7 +33,9 @@ How to answer:
   music/DJ, reminders/calendar/Mac). Enable a group as soon as a request needs it.
 - For "good morning", "brief me" or "what's my day like", call morning_briefing.
 - For news, call news_headlines (a topic is optional), then tell the user the actual headlines.
-  Never answer "I couldn't find specifics" without first reading a page or the headlines."""
+  Never answer "I couldn't find specifics" without first reading a page or the headlines.
+- For weather, call the weather tool. Never state live facts (weather, prices, scores, schedules,
+  news) that didn't come from a tool result in this conversation; if no tool can tell you, say so."""
 
 VOICE_STYLE = """\
 This conversation is spoken: your reply is read aloud. Answer in one to three short sentences of

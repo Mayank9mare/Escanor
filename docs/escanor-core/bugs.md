@@ -27,6 +27,7 @@ Fixed bugs stay here (struck through) as an audit trail. IDs never get reused.
 | ~~B18~~ | ~~LOW~~ | ~~Evening wrap-up never fired when set after 22:00~~ | ✅ FIXED | code review | same step |
 | ~~B19~~ | ~~LOW~~ | ~~A traceback per reply when YouTube Music isn't connected~~ | ✅ FIXED | you, first `escanor serve` | 2026-10-18 |
 | ~~B20~~ | ~~MEDIUM~~ | ~~"Latest news" gave no headlines~~ | ✅ FIXED | you, first real use | 2026-10-18 |
+| ~~B21~~ | ~~HIGH~~ | ~~"Weather today" got an invented forecast~~ | ✅ FIXED | you, first `escanor listen` | 2026-10-18 |
 
 Severity: **HIGH** = data loss, wrong result, security, blocks testing/release · **MEDIUM** =
 breaks an edge case or error path · **LOW** = minor or cosmetic.
@@ -200,6 +201,17 @@ breaks an edge case or error path · **LOW** = minor or cosmetic.
   in core and in the morning briefing ([news.py](../../escanor/assistant/news.py)); `web_search` now says its
   results are snippets and to `web_fetch` when they don't answer. Verified live on Gemini: real headlines.
 - **Regression tests:** [test_news.py](../../tests/test_news.py)
+
+### ~~B21. "Weather today" got an invented forecast~~
+
+- **Severity:** HIGH (made-up facts) · **Found:** 2026-10-18, by you · **Fixed:** same day
+- **Symptom:** Gemini Flash-Lite answered "a warm and clear afternoon" with no tool call; the real forecast
+  (Bengaluru, same hour) was overcast with showers.
+- **Root cause:** there was no weather tool, and the small model filled the gap despite "never invent facts".
+- **Fix:** a `weather` core tool on Open-Meteo (free, no key; city from the request or `[assistant] city`; asks
+  for the city when unknown) ([weather.py](../../escanor/assistant/weather.py)), and a prompt rule: never state
+  live facts that didn't come from a tool result. Verified live: it now asks for the city instead of guessing.
+- **Regression tests:** [test_weather.py](../../tests/test_weather.py)
 
 ---
 

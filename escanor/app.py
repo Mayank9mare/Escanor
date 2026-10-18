@@ -175,9 +175,8 @@ def install_assistant(escanor: Escanor) -> None:
     Timers announce through every channel attached to `timers.announcers`:
     a notification here, speech (voice runtime) and printing (CLI)."""
     from .assistant.apple import Apple, apple_tools, format_events
-    from .assistant.briefing import Briefing, BriefingTool, due_today_first, weather_source
+    from .assistant.briefing import Briefing, BriefingTool, due_today_first
     from .assistant.timers import SetTimerTool, TimerCancelTool, TimersListTool, TimerService
-    from .assistant.web_search import web_search
 
     apple = Apple()
     timers = TimerService()
@@ -192,9 +191,12 @@ def install_assistant(escanor: Escanor) -> None:
     news = News(escanor.settings["assistant"].get("news_region", "IN:en"))
     escanor.agent.tools.add(NewsTool(news))
     briefing.add("Top headlines", lambda: news.text(limit=5))
-    city = escanor.settings["assistant"].get("city")
+    from .assistant.weather import Weather, WeatherTool
+    city = escanor.settings["assistant"].get("city", "")
+    weather = Weather(city)
+    escanor.agent.tools.add(WeatherTool(weather))
     if city:
-        briefing.add(f"Weather in {city}", weather_source(web_search, city))
+        briefing.add(f"Weather in {city}", lambda: weather.report())
     briefing.add("Latest journal entry", lambda: _latest_journal(escanor.vault))
 
     for tool in (*apple_tools(apple), SetTimerTool(timers), TimersListTool(timers), TimerCancelTool(timers),
