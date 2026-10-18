@@ -191,6 +191,10 @@ def install_assistant(escanor: Escanor) -> None:
     news = News(escanor.settings["assistant"].get("news_region", "IN:en"))
     escanor.agent.tools.add(NewsTool(news))
     briefing.add("Top headlines", lambda: news.text(limit=5))
+    from .assistant.shortcuts import ShortcutRunTool, Shortcuts, ShortcutsListTool
+    shortcuts = Shortcuts()
+    escanor.agent.tools.add(ShortcutsListTool(shortcuts))
+    escanor.agent.tools.add(ShortcutRunTool(shortcuts, escanor.settings["assistant"].get("shortcuts_allowed", [])))
     from .assistant.weather import Weather, WeatherTool
     city = escanor.settings["assistant"].get("city", "")
     weather = Weather(city)
@@ -258,7 +262,7 @@ def install_music(escanor: Escanor) -> None:
     except (ValueError, RuntimeError):
         dj_model = None  # no key: the DJ still picks (first radio track) but stays quiet
     dj = DJ(player, library, dj_model, SpendGuard(home / "dj_usage.json", int(music["daily_model_calls"])),
-            patter_every=int(music["patter_every"]))
+            patter_every=int(music["patter_every"]), style=music.get("dj_style", "talk_over"))
     for tool in music_tools(player, library, dj):
         escanor.agent.tools.add(tool)
     escanor.services.update(player=player, library=library, dj=dj,

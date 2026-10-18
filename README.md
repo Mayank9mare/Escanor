@@ -105,8 +105,9 @@ Pressing the mic, or sending a message while Escanor is talking, interrupts it. 
    Optionally paste your browser's request headers so the DJ can use your history and liked songs.
 3. Say or type "DJ mode, chill evening".
 
-The DJ picks each next song from YouTube Music's radio and your likes, introduces some of them, and
-turns the music down whenever Escanor talks or listens.
+The DJ picks each next song from YouTube Music's radio and your likes and introduces some of them
+radio-style, talking over the opening seconds while the music dips (`[music] dj_style = "pause"` to
+stop the song instead). No mood? It picks one from the time of day. "More like this" queues similar songs.
 
 ## Connect any service (MCP)
 
@@ -124,6 +125,21 @@ url = "https://example.com/mcp"                                 # remote servers
 ```
 
 Tools the server marks read-only run straight away; anything else asks first. `/mcp` shows what's connected.
+
+## Menu bar
+
+```bash
+uv pip install -e ".[menubar]"
+escanor menubar                    # ☀︎ idle · ◐ thinking · ✺ speaking · ☾ night · ◌ not running
+escanor service install --menubar  # start it at login (it starts the server too)
+```
+
+The menu opens the HUD, stops Escanor talking, sets quiet mode for an hour, and switches models.
+
+## Apple Shortcuts
+
+"Turn on focus mode", "lights off", or any Shortcut you've made: Escanor runs it by name and asks first.
+To run some without asking: `[assistant] shortcuts_allowed = ["Focus On", "Lights Off"]`.
 
 ## Proactive mode
 

@@ -112,6 +112,7 @@ class AudioOut:
         self._holds = 0
         self._ducked = False
         self._ducker_warned = False
+        self._prefetched: dict[str, asyncio.Future] = {}
         self._task: asyncio.Task | None = None
         self.on_speaking: Callable[[bool], None] | None = None
         # Called with each WAV just before it plays (the HUD lip-syncs to it).
@@ -135,11 +136,17 @@ class AudioOut:
             self._task = None
         self._set_ducked(False)
 
+    def prefetch(self, text: str) -> None:
+        """Start synthesising `text` now so a later say(text) plays at once
+        (the DJ readies its intro while the previous song is still playing)."""
+        if text not in self._prefetched:
+            self._prefetched[text] = asyncio.get_running_loop().run_in_executor(None, self._synthesize, text)
+
     def say(self, text: str, priority: int = REPLY) -> asyncio.Future:
         """Queue `text`; returns a future done when it has been spoken (or dropped)."""
         loop = asyncio.get_running_loop()
         self.start()
-        audio = loop.run_in_executor(None, self._synthesize, text)
+        audio = self._prefetched.pop(text, None) or loop.run_in_executor(None, self._synthesize, text)
         done = loop.create_future()
         item = _Item(priority, next(self._seq), text, audio, done)
         heapq.heappush(self._queue, item)

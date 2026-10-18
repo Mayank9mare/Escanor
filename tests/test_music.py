@@ -244,12 +244,13 @@ class MemoryLibrary:
         return [Track("r1", "Next One", ("Band",)), Track("l1", "Liked", ("Me",))]
 
 
-def _dj(tmp_path, player, model=None, cap=10, said=None, patter_every=1):
+def _dj(tmp_path, player, model=None, cap=10, said=None, patter_every=1, style="pause", prefetch=None, hour=None):
     async def say(text):
         said.append(text)
         player.log.append("say")
     return DJ(player, MemoryLibrary(), model, SpendGuard(tmp_path / "u.json", cap),
-              say=say if said is not None else None, patter_every=patter_every, run_loop=False)
+              say=say if said is not None else None, patter_every=patter_every, run_loop=False,
+              style=style, prefetch=prefetch, hour=hour)
 
 
 async def test_should_start_from_search_when_nothing_playing(tmp_path):
@@ -311,7 +312,8 @@ async def test_should_resume_music_even_if_speaking_fails(tmp_path):
     async def broken_say(text):
         raise RuntimeError("speaker gone")
 
-    dj = DJ(player, MemoryLibrary(), None, SpendGuard(tmp_path / "u.json", 5), say=broken_say, run_loop=False)
+    dj = DJ(player, MemoryLibrary(), None, SpendGuard(tmp_path / "u.json", 5), say=broken_say, run_loop=False,
+            style="pause")
     dj.state.upcoming, dj.state.intro, dj.state.last_video = Track("r1", "Next One"), "intro", "seed"
     player.current = Song("Next One", "Band", "r1", duration=180, elapsed=1)
     with pytest.raises(RuntimeError):
@@ -351,3 +353,59 @@ def test_ducker_is_silent_when_music_not_connected(tmp_path):
     closed_app = YouTubeMusicPlayer("http://127.0.0.1:9", token_path=tmp_path / "t", timeout=1)
     closed_app.token_path.write_text("x")
     PlayerDucker(closed_app).duck()
+
+
+
+# ---------- DJ v2 ----------
+
+async def test_talk_over_speaks_without_pausing_and_prefetches_intro(tmp_path):
+    player = MemoryPlayer(Song("Seed", "Artist", "seed", duration=200, elapsed=190))
+    model = MockModel(script=[ModelResponse(text='{"pick": 0}'), ModelResponse(text="Here's Next One by Band.")])
+    said, prefetched = [], []
+    dj = _dj(tmp_path, player, model, said=said, style="talk_over", prefetch=prefetched.append)
+    await dj.start("focus")
+    await dj.tick()
+    await dj.tick()
+    assert prefetched == ["Here's Next One by Band."]
+    player.current = Song("Next One", "Band", "r1", duration=180, elapsed=1)
+    await dj.tick()
+    assert said == ["Here's Next One by Band."]
+    assert "pause" not in player.log and "play" not in player.log
+
+
+@pytest.mark.parametrize("hour,mood", [(7, "calm acoustic morning"), (10, "focused instrumental"),
+                                       (13, "upbeat feel-good"), (19, "chill evening"), (23, "late night lo-fi"),
+                                       (2, "ambient late night")])
+def test_auto_mood_follows_the_clock(hour, mood):
+    from escanor.music.dj import auto_mood
+    assert auto_mood(hour) == mood
+
+
+async def test_dj_without_mood_picks_one_from_the_time(tmp_path):
+    dj = _dj(tmp_path, MemoryPlayer(), hour=lambda: 19)
+    assert "chill evening" in await dj.start("")
+    await dj.stop()
+
+
+def test_more_like_this_queues_similar_songs_in_order(tmp_path):
+    from escanor.music.tools import MoreLikeThisTool
+    player = MemoryPlayer(Song("Seed", "Artist", "seed"))
+    result = MoreLikeThisTool(player, MemoryLibrary()).run(count=2)
+    assert result.ok and result.output.startswith("Up next: Seed")
+    assert player.log == ["enqueue:r1:True", "enqueue:seed:True"]  # reversed so 'seed' ends up first
+
+
+async def test_audio_out_prefetch_is_used_by_say():
+    synthesized = []
+
+    def tts(text):
+        synthesized.append(text)
+        return text.encode()
+
+    from escanor.voice.audio_out import AudioOut, NullPlayer
+    audio = AudioOut(tts, NullPlayer())
+    audio.prefetch("intro")
+    await asyncio.sleep(0.05)
+    await audio.say("intro")
+    await audio.close()
+    assert synthesized == ["intro"]  # synthesised once, ahead of time

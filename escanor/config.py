@@ -89,6 +89,7 @@ DEFAULTS: dict[str, Any] = {
         "api_url": "http://127.0.0.1:26538",   # YouTube Music app's API Server plugin
         "dj_model": "haiku",                    # picks tracks + writes intros
         "patter_every": 2,                      # introduce every Nth track
+        "dj_style": "talk_over",                # radio-style over the song's opening; "pause" = stop, speak, play
         "daily_model_calls": 150,               # DJ spend cap per day
         "duck_level": 20,                       # music volume while Escanor talks/listens
     },
@@ -97,6 +98,8 @@ DEFAULTS: dict[str, Any] = {
         "city": "",           # for the weather in the morning briefing, e.g. "Bengaluru"
         "screen": True,       # look_at_screen: screenshot -> model (asks first each time)
         "news_region": "IN:en",  # Google News edition, country:language (e.g. "US:en", "IN:hi")
+        # Apple Shortcuts that run without asking ("Focus On", "Lights Off"); all others ask first.
+        "shortcuts_allowed": [],
     },
     "proactive": {
         "enabled": True,              # Escanor speaks up on its own (see assistant/proactive.py)

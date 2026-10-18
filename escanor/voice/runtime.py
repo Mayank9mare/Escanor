@@ -22,6 +22,7 @@ def attach_dj_voice(app: Escanor, audio: AudioOut) -> None:
     dj = app.services.get("dj")
     if dj is not None:
         dj.say = lambda text: audio.say(text, DJ_PRIORITY)
+        dj.prefetch = audio.prefetch
     timers = app.services.get("timers")
     if timers is not None:
         timers.announcers.append(lambda message: audio.say(message, TIMER))

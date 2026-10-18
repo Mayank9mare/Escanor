@@ -183,3 +183,23 @@ async def test_eval_marks_errors_instead_of_failing(store):
             raise RuntimeError("429 quota")
     results = await run_eval(Agent(Failing(), "mock:m"), store, [EvalCase("what time is it?", ("get_time",))])
     assert results[0][2] is None and results[0][1][0].startswith("error: 429")
+
+
+def test_menubar_icons_follow_state_and_time():
+    from datetime import datetime
+    from escanor.menubar import icon_for
+    noon, night = datetime(2026, 10, 18, 12), datetime(2026, 10, 18, 22)
+    assert icon_for(None) == "◌"
+    assert icon_for({"state": "idle"}, noon) == "☀︎" and icon_for({"state": "idle"}, night) == "☾"
+    assert icon_for({"state": "thinking"}) == "◐" and icon_for({"state": "speaking"}) == "✺"
+
+
+def test_menubar_client_reads_status_and_reports_errors():
+    from escanor.menubar import Client
+    assert Client("http://127.0.0.1:9", timeout=0.3).status() is None
+    assert Client("http://127.0.0.1:9", timeout=0.3).post("/api/interrupt")["ok"] is False
+
+
+def test_menubar_launch_agent_plist(tmp_path):
+    plist = plistlib.loads(service_plist("/x/escanor", tmp_path, "menubar", "com.escanor.menubar"))
+    assert plist["Label"] == "com.escanor.menubar" and plist["ProgramArguments"] == ["/x/escanor", "menubar"]

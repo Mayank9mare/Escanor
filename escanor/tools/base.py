@@ -67,6 +67,11 @@ class Tool(ABC):
         """One line shown to the user when asking to confirm this call."""
         return f"{self.name} {json.dumps(arguments, ensure_ascii=False)}"
 
+    def confirmation_needed(self, arguments: dict) -> bool:
+        """For an external tool: does *this* call need a yes? Override to let
+        specific calls through (e.g. Shortcuts you've allowed)."""
+        return True
+
 
 class AsyncTool(Tool):
     """A tool whose work needs the event loop (e.g. starting the DJ's

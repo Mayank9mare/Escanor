@@ -173,3 +173,44 @@ def test_should_send_lip_sync_envelope_when_speaking_locally(store):
 def test_should_report_persona_style(store):
     client, _, _ = _client(store, [])
     assert client.get("/api/persona").json() == {"style": "escanor"}
+
+
+# ---------- B22: cross-site protection + menubar API ----------
+
+from escanor.server.app import origin_allowed  # noqa: E402
+from starlette.websockets import WebSocketDisconnect  # noqa: E402
+
+
+@pytest.mark.parametrize("origin,host,ok", [
+    (None, "127.0.0.1:8770", True),                      # menubar / curl
+    ("http://127.0.0.1:8770", "127.0.0.1:8770", True),   # Escanor's own page
+    ("http://localhost:8770", "localhost:8770", True),
+    ("https://evil.example", "127.0.0.1:8770", False),
+    ("http://127.0.0.1:9999", "127.0.0.1:8770", False),  # another local app's page
+    ("http://evil.localhost.example:8770", "evil.localhost.example:8770", False),
+])
+def test_origin_rules(origin, host, ok):
+    assert origin_allowed(origin, host) is ok
+
+
+def test_should_refuse_websocket_from_another_site(store):
+    client, _, _ = _client(store, [])
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect("/ws", headers={"origin": "https://evil.example"}) as ws:
+            ws.receive_json()
+
+
+def test_should_refuse_cross_site_control_requests(store):
+    client, app, _ = _client(store, [])
+    assert client.post("/api/model?name=mock:x", headers={"origin": "https://evil.example"}).status_code == 403
+    assert app.agent.model_spec == "mock:scripted"
+
+
+def test_menubar_status_and_controls(store):
+    client, app, _ = _client(store, [])
+    status = client.get("/api/status").json()
+    assert status["state"] == "idle" and status["model"] == "mock:scripted"
+    assert client.post("/api/model?name=mock:other").json() == {"ok": True, "model": "mock:other"}
+    assert client.post("/api/model?name=bogus").status_code == 400
+    assert client.post("/api/interrupt").json() == {"ok": True}
+    assert client.post("/api/quiet?minutes=30").status_code == 409  # proactive off in tests

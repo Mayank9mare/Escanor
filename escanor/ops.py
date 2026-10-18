@@ -37,27 +37,30 @@ def plist_path() -> Path:
     return Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
 
 
-def service_plist(executable: str, logs: Path) -> bytes:
+def service_plist(executable: str, logs: Path, command: str = "serve", label: str = LABEL) -> bytes:
     return plistlib.dumps({
-        "Label": LABEL,
-        "ProgramArguments": [executable, "serve"],
+        "Label": label,
+        "ProgramArguments": [executable, command],
         "RunAtLoad": True,
         "KeepAlive": {"SuccessfulExit": False},
-        "StandardOutPath": str(logs / "serve.log"),
-        "StandardErrorPath": str(logs / "serve.err.log"),
+        "StandardOutPath": str(logs / f"{command}.log"),
+        "StandardErrorPath": str(logs / f"{command}.err.log"),
         "EnvironmentVariables": {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"},
     })
 
 
-def service(action: str, run=subprocess.run) -> int:
-    path = plist_path()
+def service(action: str, run=subprocess.run, menubar: bool = False) -> int:
+    """menubar=True installs the menu-bar app instead (it starts the server itself)."""
+    label = "com.escanor.menubar" if menubar else LABEL
+    command = "menubar" if menubar else "serve"
+    path = Path.home() / "Library" / "LaunchAgents" / f"{label}.plist"
     domain = f"gui/{os.getuid()}"
     if action == "status":
-        result = run(["launchctl", "print", f"{domain}/{LABEL}"], capture_output=True, text=True)
+        result = run(["launchctl", "print", f"{domain}/{label}"], capture_output=True, text=True)
         print("running" if result.returncode == 0 else "not installed / not running", f"({path})")
         return 0
     if action == "uninstall":
-        run(["launchctl", "bootout", f"{domain}/{LABEL}"], capture_output=True)
+        run(["launchctl", "bootout", f"{domain}/{label}"], capture_output=True)
         path.unlink(missing_ok=True)
         print("Removed. Escanor won't start at login.")
         return 0
@@ -65,13 +68,13 @@ def service(action: str, run=subprocess.run) -> int:
     logs = config.data_dir() / "logs"
     logs.mkdir(parents=True, exist_ok=True)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(service_plist(executable, logs))
-    run(["launchctl", "bootout", f"{domain}/{LABEL}"], capture_output=True)
+    path.write_bytes(service_plist(executable, logs, command, label))
+    run(["launchctl", "bootout", f"{domain}/{label}"], capture_output=True)
     result = run(["launchctl", "bootstrap", domain, str(path)], capture_output=True, text=True)
     if result.returncode != 0:
         print(f"Wrote {path}, but launchctl failed: {result.stderr.strip()}")
         return 1
-    print(f"Installed: `escanor serve` now starts at login. Logs in {logs}.")
+    print(f"Installed: `escanor {command}` now starts at login. Logs in {logs}.")
     return 0
 
 

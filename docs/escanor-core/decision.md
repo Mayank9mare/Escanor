@@ -54,6 +54,10 @@ what we're trading away. Newest at the bottom. Reversed decisions are marked **S
 | D44 | Proactive checks are local and rule-based, no model calls | Accepted | 2026-10-18 |
 | D45 | Screenshots ask first and stay in history as files | Accepted | 2026-10-18 |
 | D46 | Images reach non-Claude models as a follow-up user message | Accepted | 2026-10-18 |
+| D47 | DJ v2 talks over the song's opening; v1 pause kept as an option | Accepted | 2026-10-18 |
+| D48 | Shortcuts: always ask, except names you allow | Accepted | 2026-10-18 |
+| D49 | Menubar polls a small local REST API | Accepted | 2026-10-18 |
+| D50 | Same-origin check on the WebSocket and control API | Accepted | 2026-10-18 |
 
 ---
 
@@ -956,3 +960,52 @@ A ([assistant/screen.py](../../escanor/assistant/screen.py)). `/new` starts a cl
 Claude accepts image blocks inside a tool result; OpenAI-style and Ollama tool messages are text-only.
 For those, the images follow the tool results as one user message ("Image(s) returned by the tool call
 above"). Verified live on Gemini: it answered "Red" for a generated red image.
+
+---
+
+## D47. DJ v2 talks over the song's opening; v1 pause kept as an option
+
+**Status:** Accepted · **Date:** 2026-10-18 · Supersedes the v1 part of D29
+
+Radio DJs talk over the first seconds of a track. With the intro synthesised while the previous song is
+still playing (`AudioOut.prefetch`), the voice starts the moment the track does, and AudioOut's ducker
+dips the music under it automatically. The pause → speak → play behaviour stays available as
+`[music] dj_style = "pause"` for intros that would clash with vocals. No mood → one from the time of day.
+
+---
+
+## D48. Shortcuts: always ask, except names you allow
+
+**Status:** Accepted · **Date:** 2026-10-18
+
+A Shortcut can do anything (send messages, change settings, unlock doors), so `shortcut_run` is external.
+Names you list in `[assistant] shortcuts_allowed` run without asking, via a per-call
+`Tool.confirmation_needed(arguments)` hook the permission gate now consults. Names are matched against
+your real shortcuts, so a made-up name never reaches `shortcuts run`.
+
+---
+
+## D49. Menubar polls a small local REST API
+
+**Status:** Accepted · **Date:** 2026-10-18
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. `rumps` app polling `/api/status` every second; POSTs for interrupt/quiet/model** | Tiny; works with any running `escanor serve`; can start the server itself | Up to 1 s lag on the icon |
+| B. Run the whole assistant inside the menubar process | One process | The menubar would own the event loop, voice and models; much bigger change |
+| C. Swift menubar app | Native | A second language and build in the repo |
+
+### Decision
+A ([menubar.py](../../escanor/menubar.py)); `escanor service install --menubar` starts it at login.
+
+---
+
+## D50. Same-origin check on the WebSocket and control API
+
+**Status:** Accepted · **Date:** 2026-10-18 · Fixes B22
+
+Binding to 127.0.0.1 keeps other machines out, but not other *websites*: a browser lets any page connect
+to localhost. The WebSocket and every non-GET request now require either no `Origin` (the menubar, curl)
+or Escanor's own origin ([server/app.py `origin_allowed`](../../escanor/server/app.py)).

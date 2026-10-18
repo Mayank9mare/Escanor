@@ -347,9 +347,12 @@ def main(argv: list[str] | None = None) -> int:
     brain_cmd.add_argument("action", choices=["reindex", "stats", "backup"])
     service_cmd = sub.add_parser("service", help="start `escanor serve` at login (launchd)")
     service_cmd.add_argument("action", choices=["install", "uninstall", "status"])
+    service_cmd.add_argument("--menubar", action="store_true", help="run the menu-bar sun at login (it starts the server)")
     eval_cmd = sub.add_parser("eval", help="check each capability picks the right tool (real model calls)")
     eval_cmd.add_argument("--delay", type=float, default=0.0, help="seconds between cases (for rate-limited free tiers)")
     sub.add_parser("brief", help="your morning briefing, then the chat")
+    menubar_cmd = sub.add_parser("menubar", help="a sun in the menu bar showing Escanor's state")
+    menubar_cmd.add_argument("--no-server", action="store_true", help="don't start `escanor serve` if it isn't running")
     usage_cmd = sub.add_parser("usage", help="model calls, tokens and cost")
     usage_cmd.add_argument("--days", type=int, default=1, help="how many days back (default: today)")
     music_cmd = sub.add_parser("music", help="connect YouTube Music")
@@ -358,6 +361,14 @@ def main(argv: list[str] | None = None) -> int:
 
     config.load_dotenv()
     config.load_dotenv(config.data_dir() / ".env")
+    if args.command == "menubar":  # needs no model or key: it only talks to the local server
+        from .menubar import run as run_menubar
+        try:
+            run_menubar(config.load_settings(), start_server=not args.no_server)
+        except RuntimeError as e:
+            print(f"escanor: {e}", file=sys.stderr)
+            return 2
+        return 0
     try:
         settings = config.load_settings()
         model, spec = build_model(args.model or settings["models"]["default"], settings)
@@ -371,7 +382,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "service":
         from .ops import service
-        return service(args.action)
+        return service(args.action, menubar=args.menubar)
 
     if args.command == "eval":
         return eval_command(app, args.delay)

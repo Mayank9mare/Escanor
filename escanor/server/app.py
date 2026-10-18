@@ -30,6 +30,7 @@ import base64
 import itertools
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 # Module-level on purpose: with `from __future__ import annotations`, FastAPI
@@ -106,11 +107,31 @@ def _event_message(event) -> dict | None:
     return None
 
 
+def origin_allowed(origin: str | None, host: str | None) -> bool:
+    """Cross-site protection (B22). Browsers let any web page connect to
+    127.0.0.1, so a page you visit could otherwise drive Escanor (and click
+    "Allow" on its own confirmations). Only Escanor's own page may: its
+    Origin must be the host it was served from. Non-browser clients (the
+    menubar, curl) send no Origin and are allowed -- they already run as you."""
+    if not origin:
+        return True
+    from urllib.parse import urlparse
+    parsed = urlparse(origin)
+    return parsed.scheme in ("http", "https") and parsed.netloc == (host or "") and \
+        (parsed.hostname or "") in ("127.0.0.1", "localhost", "::1")
+
+
 def create_server(app: Escanor, store: SessionStore, speech: Any | None, local_audio: AudioOut | None):
     """`speech` has transcribe(wav)->str and synthesize(text)->wav (SpeechEngine),
     or None for a text-only server. `local_audio` speaks on this Mac."""
     web = FastAPI(title="Escanor")
     web.mount("/static", StaticFiles(directory=STATIC), name="static")
+
+    @web.middleware("http")
+    async def same_origin_only(request, call_next):
+        if request.method != "GET" and not origin_allowed(request.headers.get("origin"), request.headers.get("host")):
+            return JSONResponse({"error": "cross-site request refused"}, status_code=403)
+        return await call_next(request)
 
     @web.get("/")
     def index() -> FileResponse:
@@ -124,8 +145,52 @@ def create_server(app: Escanor, store: SessionStore, speech: Any | None, local_a
     def models() -> JSONResponse:
         return JSONResponse({"current": app.agent.model_spec, "aliases": app.settings["models"]["aliases"]})
 
+    # ---- status & control for the menubar (local only: the server binds 127.0.0.1) ----
+    activity = {"turns": 0}
+
+    @web.get("/api/status")
+    def status() -> JSONResponse:
+        proactive = app.services.get("proactive")
+        dj = app.services.get("dj")
+        paused = getattr(proactive, "paused_until", None)
+        speaking = bool(local_audio is not None and local_audio.speaking)
+        state = "speaking" if speaking else ("thinking" if activity["turns"] else "idle")
+        return JSONResponse({
+            "state": state, "model": app.agent.model_spec,
+            "quiet_until": paused.strftime("%H:%M") if paused and paused > datetime.now() else None,
+            "dj": dj.status() if dj is not None else None,
+        })
+
+    @web.post("/api/interrupt")
+    def interrupt_speech() -> JSONResponse:
+        if local_audio is not None:
+            local_audio.interrupt()
+        return JSONResponse({"ok": True})
+
+    @web.post("/api/quiet")
+    def quiet(minutes: float = 60) -> JSONResponse:
+        proactive = app.services.get("proactive")
+        if proactive is None:
+            return JSONResponse({"ok": False, "error": "proactive mode is off"}, status_code=409)
+        until = proactive.pause(minutes) if minutes > 0 else None
+        if until is None:
+            proactive.paused_until = None
+        return JSONResponse({"ok": True, "quiet_until": until.strftime("%H:%M") if until else None})
+
+    @web.post("/api/model")
+    def switch_model(name: str) -> JSONResponse:
+        try:
+            model, spec = build_model(name, app.settings)
+        except (ValueError, RuntimeError) as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+        app.agent.set_model(model, spec)
+        return JSONResponse({"ok": True, "model": spec})
+
     @web.websocket("/ws")
     async def conversation(ws: WebSocket) -> None:
+        if not origin_allowed(ws.headers.get("origin"), ws.headers.get("host")):
+            await ws.close(code=1008)  # policy violation: another site's page
+            return
         await ws.accept()
         params = ws.query_params
         mode = params.get("speech", "local" if local_audio else "off")
@@ -184,6 +249,7 @@ def create_server(app: Escanor, store: SessionStore, speech: Any | None, local_a
                 if message:
                     await send(message)
             speaker = audio if (voice_input or speak_typed) else None
+            activity["turns"] += 1
             try:
                 await speak_turn(app.agent, session, text, speaker, confirmer, sink)
             except asyncio.CancelledError:
@@ -192,6 +258,8 @@ def create_server(app: Escanor, store: SessionStore, speech: Any | None, local_a
             except Exception as e:  # noqa: BLE001
                 log.exception("turn failed")
                 await send({"type": "error", "message": str(e)})
+            finally:
+                activity["turns"] -= 1
 
         await send({"type": "hello", "conversation": session.id, "model": app.agent.model_spec,
                     "history": _history(session), "speech": mode})

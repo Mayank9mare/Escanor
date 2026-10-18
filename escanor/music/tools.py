@@ -113,18 +113,38 @@ class DJStart(AsyncTool):
         "Start DJ mode for a mood or vibe (e.g. 'chill evening', 'focus coding', '90s bollywood'): "
         "Escanor picks songs and introduces some of them."
     )
-    input_schema = {"type": "object", "properties": {"mood": {"type": "string"}}, "required": ["mood"]}
+    input_schema = {"type": "object", "properties": {"mood": {"type": "string", "description": "optional; picked from the time of day if left out"}}}
     group = GROUP
     side_effect = WRITE
 
     def __init__(self, dj: DJ):
         self.dj = dj
 
-    async def run_async(self, mood: str) -> ToolResult:
+    async def run_async(self, mood: str = "") -> ToolResult:
         try:
             return ToolResult(ok=True, output=await self.dj.start(mood))
         except _ERRORS as e:
             return ToolResult(ok=False, output=str(e))
+
+
+class MoreLikeThisTool(_MusicTool):
+    name = "music_more_like_this"
+    description = "Queue songs like the one playing now, up next (YouTube Music's radio for it)."
+    input_schema = {"type": "object", "properties": {"count": {"type": "integer", "description": "default 3"}}}
+
+    def run(self, count: int = 3) -> ToolResult:
+        try:
+            song = self.player.song()
+            if song is None:
+                return ToolResult(ok=False, output="Nothing is playing.")
+            similar = self.library.radio(song.video_id, 15)[: max(1, min(int(count or 3), 10))]
+            for track in reversed(similar):  # each goes "up next", so add in reverse to keep the order
+                self.player.enqueue(track.video_id, next_up=True)
+        except _ERRORS as e:
+            return ToolResult(ok=False, output=str(e))
+        if not similar:
+            return ToolResult(ok=False, output="No similar songs found.")
+        return ToolResult(ok=True, output="Up next: " + "; ".join(t.describe() for t in similar))
 
 
 class DJStop(AsyncTool):
@@ -158,5 +178,5 @@ class DJStatus(AsyncTool):
 def music_tools(player: YouTubeMusicPlayer, library: MusicLibrary, dj: DJ) -> list[Tool]:
     return [
         NowPlayingTool(player, library), PlayTool(player, library), QueueTool(player, library),
-        ControlTool(player, library), DJStart(dj), DJStop(dj), DJStatus(dj),
+        ControlTool(player, library), MoreLikeThisTool(player, library), DJStart(dj), DJStop(dj), DJStatus(dj),
     ]

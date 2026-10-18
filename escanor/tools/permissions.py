@@ -44,7 +44,7 @@ def fence_untrusted(source: str, text: str) -> str:
 class PermissionGate:
     async def dispatch(self, call: ToolCall, tools: ToolRegistry, confirmer, session: Session) -> ToolResult:
         tool = tools.get(call.name)
-        if tool is not None and self.needs_confirmation(tool, tools, session):
+        if tool is not None and self.needs_confirmation(tool, tools, session, call.arguments):
             approved = False
             if confirmer is not None:
                 approved = await confirmer.confirm(call, tool.describe_call(call.arguments))
@@ -56,9 +56,9 @@ class PermissionGate:
             result = ToolResult(ok=True, output=fence_untrusted(call.name, result.output), data=result.data)
         return result
 
-    def needs_confirmation(self, tool, tools: ToolRegistry, session: Session) -> bool:
+    def needs_confirmation(self, tool, tools: ToolRegistry, session: Session, arguments: dict | None = None) -> bool:
         if tool.side_effect == EXTERNAL:
-            return True
+            return tool.confirmation_needed(arguments or {})
         return bool(tool.affects_prompt and turn_read_untrusted(session, tools))
 
 

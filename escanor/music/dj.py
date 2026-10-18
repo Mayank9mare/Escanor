@@ -9,10 +9,13 @@ Every couple of seconds the DJ looks at what's playing:
   radio for the current song plus your liked songs, avoiding repeats --
   queues it "up next", and (every `patter_every` tracks) writes a short
   intro for it.
-- When that track starts, v1 does pause -> speak the intro -> play, so
-  the DJ never talks over vocals (IMPLEMENTATION_PLAN.md Phase 5).
+- When that track starts, the intro is spoken over its opening seconds,
+  radio-style ("talk_over", v2): the intro was synthesised in advance so
+  it starts at once, and AudioOut's ducker dips the music under it. The
+  v1 style ("pause": pause -> speak -> play) is still available.
   Patter goes through AudioOut at the lowest priority: if you start
   talking to Escanor, the conversation wins.
+- No mood given? It picks one from the time of day (auto_mood).
 
 The DJ makes model calls on its own, so a SpendGuard caps them per day;
 past the cap it keeps playing (first unplayed radio track) but stops
@@ -24,7 +27,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Callable
 from ..models.base import Model
@@ -74,6 +77,17 @@ class DJState:
     note: str = ""
 
 
+MOODS = [  # (from hour, mood) for auto mode
+    (0, "ambient late night"), (5, "calm acoustic morning"), (9, "focused instrumental"),
+    (12, "upbeat feel-good"), (15, "energetic afternoon"), (18, "chill evening"), (21, "late night lo-fi"),
+]
+
+
+def auto_mood(hour: int) -> str:
+    """A mood for the time of day, used when you just say "DJ mode"."""
+    return [mood for start, mood in MOODS if hour >= start][-1]
+
+
 def _json_object(text: str) -> dict:
     match = re.search(r"\{.*\}", text, re.DOTALL)
     try:
@@ -86,7 +100,8 @@ class DJ:
     def __init__(self, player: YouTubeMusicPlayer, library: MusicLibrary, model: Model | None,
                  guard: SpendGuard, say: Callable[[str], "asyncio.Future | None"] | None = None,
                  patter_every: int = 2, lookahead: float = 20.0, poll_seconds: float = 2.0,
-                 run_loop: bool = True):
+                 run_loop: bool = True, style: str = "talk_over",
+                 prefetch: Callable[[str], None] | None = None, hour: Callable[[], int] | None = None):
         self.player = player
         self.library = library
         self.model = model
@@ -96,6 +111,9 @@ class DJ:
         self.lookahead = lookahead
         self.poll_seconds = poll_seconds
         self.run_loop = run_loop          # False in tests, which call tick() themselves
+        self.style = style                # "talk_over" (v2, radio-style) or "pause" (v1)
+        self.prefetch = prefetch          # AudioOut.prefetch: synthesise the intro ahead of time
+        self._hour = hour or (lambda: datetime.now().hour)
         self.state = DJState()
         self._task: asyncio.Task | None = None
 
@@ -103,7 +121,10 @@ class DJ:
 
     async def start(self, mood: str) -> str:
         """Start (or re-aim) DJ mode. Returns what's happening, for the tool result."""
-        self.state = DJState(mood=mood.strip() or "whatever fits", running=True)
+        mood = (mood or "").strip()
+        if not mood or mood.lower() in ("auto", "anything", "whatever", "surprise me"):
+            mood = auto_mood(self._hour())
+        self.state = DJState(mood=mood, running=True)
         current = await asyncio.to_thread(self.player.song)
         if current is None or current.paused:
             seeds = await asyncio.to_thread(self.library.search, f"{self.state.mood} songs", 5)
@@ -164,15 +185,22 @@ class DJ:
         planned = self.state.upcoming
         intro = self.state.intro
         self.state.upcoming, self.state.intro = None, None
-        if planned is not None and planned.video_id == song.video_id and intro and self.say is not None:
-            # v1: pause, introduce, resume -- never talk over the vocals.
-            await asyncio.to_thread(self.player.pause)
-            try:
-                spoken = self.say(intro)
-                if spoken is not None:
-                    await spoken
-            finally:
-                await asyncio.to_thread(self.player.play)
+        if planned is None or planned.video_id != song.video_id or not intro or self.say is None:
+            return
+        if self.style == "talk_over":
+            # v2: talk over the opening seconds; AudioOut ducks the music under the voice.
+            spoken = self.say(intro)
+            if spoken is not None:
+                await spoken
+            return
+        # v1: pause, introduce, resume -- never talk over the vocals.
+        await asyncio.to_thread(self.player.pause)
+        try:
+            spoken = self.say(intro)
+            if spoken is not None:
+                await spoken
+        finally:
+            await asyncio.to_thread(self.player.play)
 
     async def _prepare_next(self, song: Song) -> None:
         candidates = await self._candidates(song)
@@ -188,6 +216,8 @@ class DJ:
             if intro:
                 self.state.intro = intro
                 self.state.tracks_since_patter = 0
+                if self.prefetch is not None:
+                    self.prefetch(intro)  # ready the moment the track starts
 
     async def _candidates(self, song: Song) -> list[Track]:
         radio = await asyncio.to_thread(self.library.radio, song.video_id, 25)

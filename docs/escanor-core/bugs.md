@@ -28,6 +28,7 @@ Fixed bugs stay here (struck through) as an audit trail. IDs never get reused.
 | ~~B19~~ | ~~LOW~~ | ~~A traceback per reply when YouTube Music isn't connected~~ | ✅ FIXED | you, first `escanor serve` | 2026-10-18 |
 | ~~B20~~ | ~~MEDIUM~~ | ~~"Latest news" gave no headlines~~ | ✅ FIXED | you, first real use | 2026-10-18 |
 | ~~B21~~ | ~~HIGH~~ | ~~"Weather today" got an invented forecast~~ | ✅ FIXED | you, first `escanor listen` | 2026-10-18 |
+| ~~B22~~ | ~~HIGH~~ | ~~Any website could drive Escanor through the local WebSocket~~ | ✅ FIXED | review while adding the menubar API | 2026-10-18 |
 
 Severity: **HIGH** = data loss, wrong result, security, blocks testing/release · **MEDIUM** =
 breaks an edge case or error path · **LOW** = minor or cosmetic.
@@ -212,6 +213,16 @@ breaks an edge case or error path · **LOW** = minor or cosmetic.
   for the city when unknown) ([weather.py](../../escanor/assistant/weather.py)), and a prompt rule: never state
   live facts that didn't come from a tool result. Verified live: it now asks for the city instead of guessing.
 - **Regression tests:** [test_weather.py](../../tests/test_weather.py)
+
+### ~~B22. Any website could drive Escanor through the local WebSocket~~
+
+- **Severity:** HIGH (security) · **Found:** 2026-10-18, review while adding the menubar endpoints · **Fixed:** same day
+- **Root cause:** the server binds 127.0.0.1, but browsers let any page open `ws://127.0.0.1:8770/ws`
+  (no CORS for WebSockets). A malicious page could send messages and answer its own confirmation
+  requests, so "external" actions weren't really protected while `escanor serve` was running.
+- **Fix:** Origin check on the WebSocket and all non-GET requests (D50).
+- **Regression tests:** `test_origin_rules`, `test_should_refuse_websocket_from_another_site`,
+  `test_should_refuse_cross_site_control_requests` in [test_server.py](../../tests/test_server.py)
 
 ---
 
