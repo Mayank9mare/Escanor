@@ -77,6 +77,9 @@ DEFAULTS: dict[str, Any] = {
         "tts": "piper",               # piper (local) | sarvam (cloud, Indian English) | mock
         "tts_voice": "en_US-ryan-high",   # deep male; or en_GB-alan-medium (British male)
         "tts_speed": 1.1,             # Piper length_scale: >1 slower and weightier
+        # Voice weight (voice/effects.py): "sun" = heaviest at noon, lighter at night;
+        # "heavy" = always deep and chesty; "none" = the plain TTS voice.
+        "effect": "sun",
         # A phrase ("hey escanor": spotted by transcribing speech, any phrase works)
         # or an openWakeWord model name ("hey_jarvis": a dedicated detector).
         "wake_word": "hey escanor",

@@ -97,6 +97,8 @@ Say **"hey Escanor"**, alone or with your question in the same breath ("hey Esca
 time?"). The wake phrase is spotted by Whisper with a hint for the name, so any phrase works:
 `[voice] wake_word = "hey escanor"`. His voice is a deep male Piper voice spoken a touch slowly
 (`tts_voice = "en_US-ryan-high"`, `tts_speed = 1.1`); `en_GB-alan-medium` is a British alternative.
+The voice is made **heavy** (deeper, chestier, a touch of hall) and its weight follows the sun: heaviest at
+high noon, lighter at night. `[voice] effect = "heavy"` keeps it heavy all day; `"none"` turns it off.
 
 Pressing the mic, or sending a message while Escanor is talking, interrupts it. Talking over it in
 `listen` mode needs headphones (`[voice] barge_in = "headphones"`), otherwise it hears itself.

@@ -16,6 +16,7 @@ after that -- loading either per-request would make every turn far
 slower than it needs to be.
 """
 from __future__ import annotations
+from . import effects
 from .stt.registry import get_stt_engine
 from .tts.registry import get_tts_engine
 
@@ -31,14 +32,22 @@ class SpeechEngine:
         whisper_model: str | None = None,
         tts_voice: str | None = None,
         tts_speed: float = 1.0,
+        effect: str = "none",
     ):
         self._stt = get_stt_engine(stt_engine, model_name=whisper_model)
         self._tts = get_tts_engine(tts_engine, voice=tts_voice, speed=tts_speed)
+        self._speed = tts_speed
+        self.effect = effect   # "sun" | "heavy" | "none" (voice/effects.py)
 
     def transcribe(self, wav_bytes: bytes) -> str:
         """Turn recorded audio (a WAV file's raw bytes) into text."""
         return self._stt.transcribe(wav_bytes)
 
     def synthesize(self, text: str) -> bytes:
-        """Turn text into a playable WAV file's raw bytes."""
-        return self._tts.synthesize(text)
+        """Turn text into a playable WAV file's raw bytes, made heavier by
+        the voice effect. A lowered pitch also slows speech, so the engine
+        speaks faster by the same factor to keep the pace."""
+        voice = effects.voice_for(self.effect)
+        if hasattr(self._tts, "set_length_scale"):
+            self._tts.set_length_scale(self._speed * voice.pitch)
+        return effects.apply(self._tts.synthesize(text), voice)

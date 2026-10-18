@@ -44,6 +44,10 @@ class PiperEngine(TTSEngine):
         # length_scale > 1 speaks more slowly: 1.1 gives Escanor some gravitas.
         self._config = SynthesisConfig(length_scale=length_scale)
 
+    def set_length_scale(self, length_scale: float) -> None:
+        """Change the pace (effects.py speeds Piper up to make up for a lowered pitch)."""
+        self._config.length_scale = length_scale
+
     def synthesize(self, text: str) -> bytes:
         buffer = io.BytesIO()
         with wave.open(buffer, "wb") as wav_file:

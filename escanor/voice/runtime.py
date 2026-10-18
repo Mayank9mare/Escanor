@@ -33,7 +33,7 @@ def build_speech(settings: dict) -> SpeechEngine:
     return SpeechEngine(
         stt_engine=voice["stt"], tts_engine=voice["tts"],
         whisper_model=voice.get("whisper_model") or None, tts_voice=voice.get("tts_voice") or None,
-        tts_speed=float(voice.get("tts_speed", 1.0)),
+        tts_speed=float(voice.get("tts_speed", 1.0)), effect=voice.get("effect", "sun"),
     )
 
 

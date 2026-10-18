@@ -1097,3 +1097,15 @@ phases: dawn 06:00, day 09:00, noon 11:30–12:30, afternoon, night 18:00 ([pers
 Fixed spoken lines (confirm, error, not heard) and the DJ's voice come from the same module. Five prompt
 changes a day still leave Claude's cache intact for almost every turn. Checked live on Gemini at 12:00, 15:00 and 22:00.
 
+---
+
+## D57. A heavy voice by effects, not by cloning
+
+**Status:** Accepted · **Date:** 2026-10-19
+
+The user asked for Escanor's actual voice. Cloning a voice actor from clips without consent was declined.
+Instead [effects.py](../../escanor/voice/effects.py) makes Piper's voice heavy: resampled pitch (formants drop too,
+so it sounds larger), a low-end boost, soft saturation and a short dark hall, ~40 ms a sentence in numpy. Piper
+speaks faster by the pitch factor to keep the pace. `effect = "sun"` (default) follows the persona's phases:
+heaviest at noon, lightest at night.
+
