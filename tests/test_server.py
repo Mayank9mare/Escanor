@@ -36,7 +36,16 @@ class SendTool(Tool):
         return ToolResult(ok=True, output="sent")
 
 
-def _client(store, script, speech=None, audio=None):
+class LocalClient(TestClient):
+    """TestClient whose WebSockets also come from 127.0.0.1 (it sends Host: testserver otherwise)."""
+
+    def websocket_connect(self, url, *args, headers=None, **kwargs):
+        headers = {"host": self.base_url.netloc.decode() if isinstance(self.base_url.netloc, bytes)
+                   else self.base_url.netloc, **(headers or {})}
+        return super().websocket_connect(url, *args, headers=headers, **kwargs)
+
+
+def _client(store, script, speech=None, audio=None, open_mic=None, base_url="http://127.0.0.1:8770"):
     settings = config.load_settings()
     settings["brain"]["embedder"] = "none"
     settings["skills"]["dirs"] = []
@@ -45,7 +54,8 @@ def _client(store, script, speech=None, audio=None):
     app.agent.set_model(MockModel(script=script), "mock:scripted")
     tool = SendTool()
     app.agent.tools.add(tool)
-    return TestClient(create_server(app, store, speech, audio)), app, tool
+    web = create_server(app, store, speech, audio, **({"open_mic": open_mic} if open_mic else {}))
+    return LocalClient(web, base_url=base_url), app, tool
 
 
 def _until(ws, kind):

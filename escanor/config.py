@@ -129,6 +129,14 @@ DEFAULTS: dict[str, Any] = {
         # [mcp.servers.<name>]: command/args/env (local) or url (remote); see connectors/mcp_client.py
         "servers": {},
     },
+    "hotkeys": {
+        # Global keys, handled by `escanor menubar`. Names: ctrl/control, option/alt,
+        # cmd/command, shift + a key ("space", "e", "f5"...). macOS refuses combos of
+        # only option (+shift), so keep ctrl or cmd in them. "" turns one off.
+        "talk": "ctrl+option+space",     # hold, speak, let go
+        "explain": "ctrl+option+e",      # explain the selected text (or Finder file)
+        "explain_aloud": False,          # also speak the explanation, not just show it
+    },
     "server": {
         "host": "127.0.0.1",
         "port": 8770,

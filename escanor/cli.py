@@ -331,6 +331,75 @@ def music_command(app: Escanor, action: str) -> int:
     return 0
 
 
+def _tailscale() -> str | None:
+    import shutil
+    app = "/Applications/Tailscale.app/Contents/MacOS/Tailscale"
+    return shutil.which("tailscale") or (app if Path(app).exists() else None)
+
+
+def _tailscale_name(tool: str) -> str | None:
+    """This Mac's Tailscale HTTPS name, e.g. 'mac.tail1234.ts.net'."""
+    import subprocess
+    try:
+        out = subprocess.run([tool, "status", "--json"], capture_output=True, text=True, timeout=10)
+        return (json.loads(out.stdout).get("Self", {}).get("DNSName") or "").rstrip(".") or None
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return None
+
+
+def _print_qr(link: str) -> None:
+    try:
+        import qrcode
+    except ImportError:
+        print(_dim("  (for a QR code here: uv pip install -e '.[remote]')"))
+        return
+    qr = qrcode.QRCode(border=1)
+    qr.add_data(link)
+    qr.print_ascii(invert=True)
+
+
+def pair_command(settings: dict, rotate: bool = False, off: bool = False) -> int:
+    import subprocess
+    from .server import remote
+    if off:
+        print("Phone access is off; paired devices are unpaired." if remote.remove_token()
+              else "Phone access was already off.")
+        return 0
+    token = remote.load_token()
+    if token is None or rotate:
+        token = remote.new_token()
+        print("Every device paired before is now unpaired." if rotate else "Phone access is on.")
+    port = int(settings["server"]["port"])
+    tool = _tailscale()
+    if tool is None:
+        print("Escanor reaches your phone through Tailscale, a free private network between your devices.")
+        print("  1. Install Tailscale on this Mac (https://tailscale.com/download) and on your phone,")
+        print("     signed in to the same account.")
+        print("  2. Run `escanor pair` again.")
+        return 1
+    name = _tailscale_name(tool)
+    if name is None:
+        print("Tailscale is installed but not connected. Open it, sign in, then run `escanor pair` again.")
+        return 1
+    serving = subprocess.run([tool, "serve", "status"], capture_output=True, text=True).stdout
+    if f"127.0.0.1:{port}" not in serving and f"localhost:{port}" not in serving:
+        print(f"Tailscale needs to pass https://{name} on to Escanor (port {port}), for your devices only.")
+        answer = input(f"Run `tailscale serve --bg {port}` now? [y/N] ").strip().lower()
+        if answer not in ("y", "yes"):
+            print(f"Run it yourself when ready: tailscale serve --bg {port}")
+            return 1
+        result = subprocess.run([tool, "serve", "--bg", str(port)])
+        if result.returncode != 0:
+            print("That didn't work (HTTPS certificates may need turning on in the Tailscale admin console).")
+            return 1
+    link = f"https://{name}/?pair={token}"
+    print(f"\nOn your phone, open (or scan):\n  {link}\n")
+    _print_qr(link)
+    print("Then Share → Add to Home Screen for an app icon. Keep `escanor serve` (or the menubar) running.")
+    print(_dim("This link is a key: don't share it. `escanor pair --rotate` unpairs every device."))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="escanor", description="Escanor, your local assistant.")
     parser.add_argument("--model", help="alias or provider:model-id (default from config: haiku)")
@@ -355,12 +424,18 @@ def main(argv: list[str] | None = None) -> int:
     menubar_cmd.add_argument("--no-server", action="store_true", help="don't start `escanor serve` if it isn't running")
     usage_cmd = sub.add_parser("usage", help="model calls, tokens and cost")
     usage_cmd.add_argument("--days", type=int, default=1, help="how many days back (default: today)")
+    pair_cmd = sub.add_parser("pair", help="use Escanor from your phone (over Tailscale)")
+    pair_group = pair_cmd.add_mutually_exclusive_group()
+    pair_group.add_argument("--rotate", action="store_true", help="new link; unpairs every device")
+    pair_group.add_argument("--off", action="store_true", help="turn phone access off")
     music_cmd = sub.add_parser("music", help="connect YouTube Music")
     music_cmd.add_argument("action", choices=["connect", "status"])
     args = parser.parse_args(argv)
 
     config.load_dotenv()
     config.load_dotenv(config.data_dir() / ".env")
+    if args.command == "pair":  # needs no model either
+        return pair_command(config.load_settings(), rotate=args.rotate, off=args.off)
     if args.command == "menubar":  # needs no model or key: it only talks to the local server
         from .menubar import run as run_menubar
         try:

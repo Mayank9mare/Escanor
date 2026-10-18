@@ -79,11 +79,9 @@ function renderMarkdown(raw) {
 // ---------- connection ----------
 
 function connect() {
-  const query = new URLSearchParams({
-    conversation,
-    speech: params.get("speech") || "local",
-    speak_typed: $("speak-typed").checked ? "1" : "0",
-  });
+  const query = new URLSearchParams({ conversation, speak_typed: $("speak-typed").checked ? "1" : "0" });
+  // Without ?speech=, the server decides: the Mac's speakers here, the phone's own on a phone.
+  if (params.get("speech")) query.set("speech", params.get("speech"));
   ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws?${query}`);
   ws.onmessage = (e) => handle(JSON.parse(e.data));
   ws.onclose = () => { setStatus("CONNECTION LOST · RETRYING"); setTimeout(connect, 1500); };
@@ -172,6 +170,10 @@ function handle(m) {
       serverSpeaking = m.on;
       if (!m.on) envelope = null;
       if (m.on) setState("speaking"); else if (state === "speaking") settle();
+      break;
+    case "listening":  // push-to-talk hotkey held on the Mac
+      if (m.on) { setState("listening"); setStatus("LISTENING · LET GO TO SEND"); }
+      else { setStatus(""); settle(); }
       break;
     case "envelope": envelope = { start: performance.now(), step: m.step * 1000, values: m.values }; break;
     case "audio": playAudio(m.data); break;

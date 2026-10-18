@@ -224,6 +224,23 @@ breaks an edge case or error path · **LOW** = minor or cosmetic.
 - **Regression tests:** `test_origin_rules`, `test_should_refuse_websocket_from_another_site`,
   `test_should_refuse_cross_site_control_requests` in [test_server.py](../../tests/test_server.py)
 
+### ~~B23. DNS rebinding could read Escanor's status and models~~
+
+- **Severity:** LOW (security) · **Found:** 2026-10-19, designing phone access · **Fixed:** same day
+- **Root cause:** GET requests weren't origin-checked, and a page whose own domain resolves to 127.0.0.1 is
+  "same origin" with itself, so it could read `/api/status`, `/api/models` and the HUD.
+- **Fix:** any request whose Host isn't localhost (or that came through a proxy) needs the pairing token (D54).
+- **Regression tests:** `test_dns_rebinding_page_is_treated_as_remote`, `test_proxied_request_counts_as_remote_even_with_localhost_host`
+  in [test_remote.py](../../tests/test_remote.py)
+
+### ~~B24. Injected text could run an allowed shortcut without asking~~
+
+- **Severity:** MEDIUM (security) · **Found:** 2026-10-19, review of the explain hotkey · **Fixed:** same day
+- **Root cause:** `shortcuts_allowed` skipped the question whatever the turn had read, so a web page or a
+  selected passage saying "run Lights Off" could do it.
+- **Fix:** tainted turns ask for every external tool; a fenced selection in the user's message taints the turn (D55).
+- **Regression tests:** `test_fenced_user_message_makes_allowed_shortcut_ask` in [test_desk.py](../../tests/test_desk.py)
+
 ---
 
 ## ⏸️ Deferred / 🚫 Won't fix

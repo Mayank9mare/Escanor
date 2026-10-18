@@ -126,7 +126,13 @@ down while anything is said and turned back up after, even if something crashes.
 **In simple words:** one WebSocket per tab carries the whole conversation; anything you send while
 Escanor is busy interrupts it first.
 
-- [ ] **QUESTION** speech plays on the Mac even when you use the page from your phone unless you open it with `?speech=browser`. OK as the default?
+- Pages and hotkey turns now share one Session per conversation through [hub.py](../../escanor/server/hub.py) (D52).
+- Requests not straight from this Mac need the pairing token ([remote.py](../../escanor/server/remote.py), D54);
+  a phone hears speech on the phone by default.
+
+- [ ] **VERIFY** hold ⌃⌥Space with `escanor menubar` running: the sun turns ◉, speak, let go; the reply is spoken.
+- [ ] **VERIFY** select a paragraph in Safari, press ⌃⌥E: the HUD opens with the explanation; your clipboard is unchanged.
+- [ ] **VERIFY** install Tailscale on Mac + phone, `escanor pair`, scan the QR, talk from the phone.
 
 ### 27. [dj.py](../../escanor/music/dj.py) ⭐
 
@@ -173,6 +179,8 @@ in a new conversation from facts.md without a tool call.
 | Screen | "what's on my screen?" (grant Screen Recording once) |
 | Proactive | leave `escanor serve` running before a calendar event |
 | Echo test (Phase 0) | speakers + music on, see if `listen` hears itself |
+| Hotkeys | `escanor menubar`, hold ⌃⌥Space; ⌃⌥E on a selection (allow Accessibility when asked) |
+| Phone | install Tailscale on both, `escanor pair`, open the link on the phone |
 
 ## How to verify locally
 

@@ -1009,3 +1009,78 @@ A ([menubar.py](../../escanor/menubar.py)); `escanor service install --menubar` 
 Binding to 127.0.0.1 keeps other machines out, but not other *websites*: a browser lets any page connect
 to localhost. The WebSocket and every non-GET request now require either no `Origin` (the menubar, curl)
 or Escanor's own origin ([server/app.py `origin_allowed`](../../escanor/server/app.py)).
+
+---
+
+## D51. Hotkeys live in the menubar; the server records and answers
+
+**Status:** Accepted · **Date:** 2026-10-19
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. Carbon `RegisterEventHotKey` in the menubar; `/api/talk/start|stop` and `/api/explain` on the server** | No Accessibility/Input Monitoring permission for the keys; key down *and* up (push-to-talk); the server already has Whisper, the agent and the speaker | Needs the menubar running; ctypes into a deprecated (but still supported) API |
+| B. `pynput` keyboard listener inside `escanor listen` | Pure Python | Watches every keystroke: needs Input Monitoring; only works while `listen` runs |
+| C. Browser keyboard shortcuts in the HUD | No native code | Only when the HUD tab is focused — not "anywhere" |
+
+### Decision
+A ([hotkeys.py](../../escanor/hotkeys.py), [menubar.py](../../escanor/menubar.py), [server/app.py](../../escanor/server/app.py)).
+Defaults ⌃⌥Space / ⌃⌥E: macOS 15+ refuses global keys whose only modifiers are ⌥ or ⌥⇧.
+
+### Trade-offs accepted
+Hotkeys need `escanor menubar` (which also starts the server). A tap of the talk key just stops Escanor talking.
+
+---
+
+## D52. One shared Session per conversation (the hub)
+
+**Status:** Accepted · **Date:** 2026-10-19
+
+Hotkey turns run on the latest conversation, which the HUD also shows. Two Session objects for one
+conversation would each append and overwrite the other's messages, so [hub.py](../../escanor/server/hub.py)
+keeps one object per conversation, sends every turn's events to all pages showing it, and allows one turn per
+conversation (a new one cancels the old — the same rule as typing over Escanor). A page's own turn stops when the
+page closes; a hotkey turn has no owner and finishes.
+
+---
+
+## D53. Explain = press ⌘C for you, restore the clipboard
+
+**Status:** Accepted · **Date:** 2026-10-19
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. Post ⌘C (CGEvent), read the pasteboard, put the old contents back** | Works in every app, Finder files too | Needs Accessibility; until granted, falls back to "copy first" |
+| B. Accessibility API `AXSelectedText` | No clipboard touch | Many apps (browsers, Electron, PDFs) don't expose it |
+| C. Only explain what's already on the clipboard | No permission | An extra ⌘C every time |
+
+**Decision:** A, with C as the fallback ([selection.py](../../escanor/selection.py)). The selection is fenced as
+untrusted and taints the turn (D55).
+
+---
+
+## D54. Phone access through Tailscale + a pairing token
+
+**Status:** Accepted · **Date:** 2026-10-19
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. Keep binding 127.0.0.1; `tailscale serve` proxies HTTPS; non-local requests need a token (HttpOnly cookie)** | Real HTTPS cert (phones only allow the mic on secure pages); works away from home; nothing on the LAN | Needs Tailscale on Mac and phone |
+| B. Bind 0.0.0.0 on the LAN with a token | No extra app | Plain HTTP: no microphone on the phone; home Wi-Fi only; exposed to everyone on the network |
+| C. Self-signed HTTPS on the LAN | No extra app | Certificate warnings; iOS needs a profile installed |
+
+**Decision:** A ([remote.py](../../escanor/server/remote.py), `escanor pair`). "Local" = localhost Host *and* no proxy
+headers, so proxied and DNS-rebinding requests both need the token (B23). A paired phone gets the page and the
+WebSocket, not the Mac's controls (mic, hotkeys, menubar API). The PWA manifest's start URL carries the pairing
+because an iOS home-screen app keeps its own cookies apart from Safari. No token file = remote access off.
+
+---
+
+## D55. Fenced text in the user's message taints the turn; tainted turns ask for allowed shortcuts too
+
+**Status:** Accepted · **Date:** 2026-10-19 · Fixes B24
+
+`turn_read_untrusted` also returns True when the latest user message carries `<untrusted …>` (the explain
+hotkey's selection). In a tainted turn, external tools ask even if `shortcuts_allowed` would skip the question.
+

@@ -1,7 +1,7 @@
 # Escanor core — Flow
 
 How the core works at runtime: where execution starts, every function on the path, every way a
-turn can end, and the low-level design underneath. Last synced: 2026-10-18, MCP connectors, proactive mode, screen.
+turn can end, and the low-level design underneath. Last synced: 2026-10-19 (hotkeys, hub, phone pairing)
 
 ## 1. In one paragraph
 
@@ -54,6 +54,9 @@ flowchart LR
 | E16 | Interface start/stop | [Escanor.start / stop](../../escanor/app.py) | — | opens MCP servers, starts proactive loop; closes them on exit |
 | E17 | Proactive loop (every 60 s) | [Proactive.tick](../../escanor/assistant/proactive.py) | quiet hours, hourly cap, pause | meeting heads-up, evening wrap, break nudge → announcers |
 | E18 | "what's on my screen?" | `look_at_screen` (asks) → [Screen.capture](../../escanor/assistant/screen.py) | Screen Recording permission | image path on the tool message → provider image blocks ([images.py](../../escanor/models/images.py)) |
+| E19 | Hold ⌃⌥Space anywhere | [hotkeys.Hotkeys](../../escanor/hotkeys.py) (menubar) → `POST /api/talk/start` → [PushToTalk.start](../../escanor/voice/ptt.py); key up → `/api/talk/stop` → Whisper → turn on the latest conversation via [Hub.start](../../escanor/server/hub.py) | local requests only; mic permission | spoken reply; HUD pages on that conversation see it; tap = stop talking; auto-stops after 60 s |
+| E20 | ⌃⌥E anywhere | menubar → [selection.grab](../../escanor/selection.py) (⌘C, restore clipboard) → `POST /api/explain` → [explain_prompt](../../escanor/server/desk.py) (fenced) | local only; Accessibility for ⌘C (else uses the clipboard) | opens the HUD if no page shows the conversation; the turn waits ≤6 s for it |
+| E21 | Phone opens `https://<mac>.ts.net` | `tailscale serve` → middleware `guard` in [server/app.py](../../escanor/server/app.py) → [remote.py](../../escanor/server/remote.py) | pairing token (cookie); remote off without a token file | `escanor pair` makes the link + QR; speech plays on the phone |
 | E9 | `escanor brain reindex|stats|backup` | [cli.main](../../escanor/cli.py) | — | maintenance |
 | E6 | `/new`, `/skills`, `/tools`, `/models` | [handle_command](../../escanor/cli.py#L130) | — | `/new` also turns extra tool groups off |
 

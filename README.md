@@ -136,6 +136,30 @@ escanor service install --menubar  # start it at login (it starts the server too
 
 The menu opens the HUD, stops Escanor talking, sets quiet mode for an hour, and switches models.
 
+**Hotkeys** (work in any app while the menubar runs):
+
+| Key | What it does |
+|---|---|
+| hold **⌃⌥Space** | push-to-talk: speak, let go, Escanor answers aloud. A tap just stops it talking. |
+| **⌃⌥E** | explain the selected text (or the file selected in Finder); the answer appears in the HUD |
+
+Explain presses ⌘C for you and then puts your clipboard back, which needs Accessibility permission (macOS asks
+the first time). Until you allow it, copy first and then press ⌃⌥E. Change the keys under `[hotkeys]`.
+
+## On your phone
+
+Escanor stays private to your Mac; [Tailscale](https://tailscale.com/download) (free) links your phone to it
+over HTTPS, at home or away. Install it on both devices with the same account, then:
+
+```bash
+uv pip install -e ".[remote]"   # optional: QR code in the terminal
+escanor pair                    # sets up `tailscale serve`, prints the link + QR
+```
+
+Open the link on your phone once, then Share → Add to Home Screen. Speech plays on the phone, and its mic works
+in the page. The link is a key: `escanor pair --rotate` unpairs every device, `escanor pair --off` turns phone
+access off.
+
 ## Apple Shortcuts
 
 "Turn on focus mode", "lights off", or any Shortcut you've made: Escanor runs it by name and asks first.
@@ -183,6 +207,8 @@ Ctrl-C stops a reply mid-way. `escanor --continue` resumes the last conversation
 | `escanor eval [--delay 20]` | check each capability picks the right tool (stubbed tools, real model calls) |
 | `escanor brain reindex\|stats\|backup` | rebuild the search index, show size, commit notes to git |
 | `escanor service install\|uninstall\|status` | start the web UI at login (launchd) |
+| `escanor menubar` | the sun in the menu bar, with the global hotkeys |
+| `escanor pair [--rotate\|--off]` | use Escanor from your phone |
 
 ## Configuration
 
@@ -247,7 +273,7 @@ Design notes: [decisions](docs/escanor-core/decision.md) · [runtime flow](docs/
 
 ## Status
 
-All eight phases of the [implementation plan](IMPLEMENTATION_PLAN.md) are built, with 233 offline tests.
+All eight phases of the [implementation plan](IMPLEMENTATION_PLAN.md) are built, with 359 offline tests.
 
 Verified live: Gemini end to end (10/10 tool choice on the eval), Piper and Whisper speech, the web UI,
 YouTube Music search, arXiv ingestion. Still to verify on a real setup: Claude, the YouTube Music app
