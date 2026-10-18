@@ -58,8 +58,12 @@ drifting off it, and it **lip-syncs to the real voice**: the server sends the lo
 sentence. Replies render with formatting and links. Keys: <kbd>Space</kbd> talk · <kbd>⌘K</kbd> type ·
 <kbd>Esc</kbd> interrupt · <kbd>T</kbd> transcript.
 
-The personality follows the sun too: proud and regal by day, magnificently confident at noon, polite and
-modest at night, but always accurate and brief. Prefer a neutral assistant? Set `[persona] style = "plain"`.
+The personality is the Lion's Sin of Pride, and it follows the sun: composed at dawn, proud and regal by
+day, **The One** at high noon, an easy confidence through the afternoon, and after sunset the timid innkeeper
+who apologises for everything. Under the pride he's loyal and kind, takes your side ("Who decided that?" when
+you doubt yourself), and never bluffs: answers stay accurate and brief, and errors are reported plainly. His
+spoken confirmations and the DJ's intros change with the hour too. Prefer a neutral assistant? Set
+`[persona] style = "plain"`.
 
 ## Quickstart
 

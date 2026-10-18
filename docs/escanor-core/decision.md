@@ -1084,3 +1084,16 @@ because an iOS home-screen app keeps its own cookies apart from Safari. No token
 `turn_read_untrusted` also returns True when the latest user message carries `<untrusted …>` (the explain
 hotkey's selection). In a tainted turn, external tools ask even if `shortcuts_allowed` would skip the question.
 
+---
+
+## D56. A fuller Pride persona: one constant character, five solar phases
+
+**Status:** Accepted · **Date:** 2026-10-19
+
+The old persona only changed tone (proud by day, humble at night). Now a constant character sheet (loyal and
+protective under the arrogance, earned pride so never bluffing, "Who decided that?" when the user doubts
+themselves, sun/lion/Rhitta imagery at most once a reply, no flourishes in errors or sad topics) plus five
+phases: dawn 06:00, day 09:00, noon 11:30–12:30, afternoon, night 18:00 ([persona.py](../../escanor/core/persona.py)).
+Fixed spoken lines (confirm, error, not heard) and the DJ's voice come from the same module. Five prompt
+changes a day still leave Claude's cache intact for almost every turn. Checked live on Gemini at 12:00, 15:00 and 22:00.
+

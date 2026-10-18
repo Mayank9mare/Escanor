@@ -16,6 +16,7 @@ from ..core.agent import Agent, Confirmer
 from ..core.events import Error, Event, TextDelta, TurnDone
 from ..core.session import Session
 from ..models.base import ToolCall
+from ..core.persona import line
 from .audio_out import CONFIRM, REPLY, AudioOut
 from .chunker import SentenceChunker
 
@@ -53,7 +54,7 @@ async def speak_turn(agent: Agent, session: Session, text: str, audio: AudioOut 
             for sentence in chunker.flush():
                 audio.say(sentence, REPLY)
             if isinstance(event, Error):
-                audio.say("Sorry, something went wrong; the details are on screen.", REPLY)
+                audio.say(line("error"), REPLY)
     return events
 
 
@@ -65,6 +66,6 @@ class VoiceConfirmer:
         self._listen = listen
 
     async def confirm(self, call: ToolCall, summary: str) -> bool:
-        await self._audio.say(f"Should I go ahead with {summary}? Say yes or no.", CONFIRM)
+        await self._audio.say(line("confirm", summary=summary) + " Say yes or no.", CONFIRM)
         answer = await self._listen()
         return is_yes(answer)

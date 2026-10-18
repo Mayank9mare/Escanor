@@ -18,6 +18,7 @@ from .brain.tools import BRAIN_GUIDANCE, brain_tools
 from .brain.vault import Vault
 from .core.agent import Agent
 from .core.costs import DailyBudget
+from .core import persona
 from .core.persona import persona_section
 from .core.router import Router
 from .core.prompts import PromptBuilder
@@ -89,6 +90,7 @@ def build_brain(settings: dict) -> tuple[Vault, BrainIndex]:
 
 
 def build_app(settings: dict, model: Model, model_spec: str) -> Escanor:
+    persona.configure(settings["persona"]["style"])
     skills = discover([Path(d) for d in settings["skills"]["dirs"]], allow=settings["skills"].get("allow"))
     vault, index = build_brain(settings)
 

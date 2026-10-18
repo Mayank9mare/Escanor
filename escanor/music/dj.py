@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 from typing import Callable
+from ..core.persona import dj_voice
 from ..models.base import Model
 from .library import MusicLibrary, Track
 from .player import PlayerNotAuthorized, PlayerUnavailable, Song, YouTubeMusicPlayer
@@ -249,7 +250,7 @@ class DJ:
         if self.model is None or not self.guard.allow():
             return None
         prompt = (
-            f"You are Escanor, a warm, witty radio DJ. Mood: {self.state.mood}. "
+            f"You are Escanor, {dj_voice()}. Mood: {self.state.mood}. "
             f"Just played: {song.title} by {song.artist}. Up next: {nxt.title} by {nxt.artist}"
             + (f" from {nxt.album}" if nxt.album else "")
             + ". Write the spoken intro: at most 25 words, plain speech, name the song and artist. "

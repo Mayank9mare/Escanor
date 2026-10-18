@@ -46,6 +46,7 @@ from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from ..app import Escanor, build_model
+from ..core.persona import line
 from ..core.events import Error, ModelSwitched, TextDelta, ToolFinished, ToolStarted, TurnDone
 from ..core.session import Session, SessionStore
 from ..models.base import ToolCall
@@ -92,7 +93,7 @@ class WebConfirmer:
         self.pending[request_id] = future
         await self._send({"type": "confirm_request", "id": request_id, "summary": summary})
         if self._audio is not None:
-            self._audio.say(f"Should I go ahead with {summary}?", CONFIRM)
+            self._audio.say(line("confirm", summary=summary), CONFIRM)
         try:
             return await future
         finally:
@@ -401,7 +402,7 @@ def create_server(app: Escanor, store: SessionStore, speech: Any | None, local_a
                         wav = base64.b64decode(message.get("data", ""))
                         text = (await asyncio.to_thread(speech.transcribe, wav)).strip()
                         if not text:
-                            await send({"type": "error", "message": "Didn't catch that. Try again?"})
+                            await send({"type": "error", "message": line("not_heard")})
                             continue
                     else:
                         text = str(message.get("text", "")).strip()
