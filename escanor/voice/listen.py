@@ -64,9 +64,18 @@ class OpenWakeWord:
     def __init__(self, model: str = "hey_jarvis", threshold: float = 0.6):
         try:
             from openwakeword.model import Model
+            from openwakeword.utils import download_models
         except ImportError as e:
             raise RuntimeError("Install the listen extra (`uv pip install -e '.[listen]'`) for wake-word mode.") from e
-        self._model = Model(wakeword_models=[model])
+        # onnxruntime is already installed (Piper uses it); the library's default,
+        # tflite, isn't. The model files (~1 MB) are fetched once from the
+        # openWakeWord releases on first use.
+        try:
+            self._model = Model(wakeword_models=[model], inference_framework="onnx")
+        except (ValueError, FileNotFoundError, OSError):
+            print(f"Downloading the '{model}' wake-word model (one time, ~1 MB)…", flush=True)
+            download_models(model_names=[model])
+            self._model = Model(wakeword_models=[model], inference_framework="onnx")
         self._threshold = threshold
 
     def detected(self, frame: np.ndarray) -> bool:

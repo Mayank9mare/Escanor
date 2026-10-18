@@ -404,12 +404,16 @@ def main(argv: list[str] | None = None) -> int:
             except (RuntimeError, ValueError) as e:
                 print(f"escanor: {e}", file=sys.stderr)
                 return 2
-        if args.command == "serve":
-            if args.port:
-                settings["server"]["port"] = args.port
-            runtime.serve(app, store, speech, mute=args.mute)
-        else:
-            runtime.listen(app, store, speech, use_enter=args.enter)
+        try:
+            if args.command == "serve":
+                if args.port:
+                    settings["server"]["port"] = args.port
+                runtime.serve(app, store, speech, mute=args.mute)
+            else:
+                runtime.listen(app, store, speech, use_enter=args.enter)
+        except RuntimeError as e:  # e.g. a missing optional install: say what to do, no traceback
+            print(f"escanor: {e}", file=sys.stderr)
+            return 2
         return 0
 
     latest = store.latest_id() if args.resume else None
