@@ -45,6 +45,7 @@ from ..core.session import Session, SessionStore
 from ..models.base import ToolCall
 from ..voice.audio_out import CONFIRM, AudioOut
 from ..voice.conversation import speak_turn
+from ..voice.envelope import STEP, wav_envelope
 from ..voice.web_player import WebSocketPlayer
 
 log = logging.getLogger(__name__)
@@ -156,6 +157,9 @@ def create_server(app: Escanor, store: SessionStore, speech: Any | None, local_a
             audio = None
         if audio is not None:
             audio.on_speaking = lambda on: asyncio.get_running_loop().create_task(send({"type": "speaking", "on": on}))
+            if mode == "local":  # the page can't hear the Mac's speakers: send the loudness curve instead
+                audio.on_play = lambda wav: asyncio.get_running_loop().create_task(
+                    send({"type": "envelope", "step": STEP, "values": wav_envelope(wav)}))
 
         confirmer = WebConfirmer(send, audio)
         turn: asyncio.Task | None = None
@@ -233,5 +237,6 @@ def create_server(app: Escanor, store: SessionStore, speech: Any | None, local_a
                 await audio.close()
             elif audio is not None:
                 audio.on_speaking = None
+                audio.on_play = None
 
     return web

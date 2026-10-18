@@ -53,6 +53,11 @@ of day**, rising through the morning, **THE ONE** at high noon, a humble ember a
 with your voice while **listening**, burn ember-red while **deliberating**, and throw solar flares while
 **proclaiming**, with live subtitles, a tool readout and a transcript panel.
 
+Under the hood: the sun is a **WebGL shader** (churning plasma, limb darkening, a flame corona) with embers
+drifting off it, and it **lip-syncs to the real voice**: the server sends the loudness curve of every spoken
+sentence. Replies render with formatting and links. Keys: <kbd>Space</kbd> talk · <kbd>⌘K</kbd> type ·
+<kbd>Esc</kbd> interrupt · <kbd>T</kbd> transcript.
+
 The personality follows the sun too: proud and regal by day, magnificently confident at noon, polite and
 modest at night, but always accurate and brief. Prefer a neutral assistant? Set `[persona] style = "plain"`.
 

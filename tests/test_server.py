@@ -157,3 +157,19 @@ def test_should_refuse_audio_when_server_is_text_only(store):
         ws.receive_json()
         ws.send_json({"type": "audio", "data": ""})
         assert ws.receive_json()["type"] == "error"
+
+
+def test_should_send_lip_sync_envelope_when_speaking_locally(store):
+    speech = FakeSpeech("hi")
+    audio = AudioOut(speech.synthesize, NullPlayer())
+    client, _, _ = _client(store, [ModelResponse(text="Behold the sun, at its zenith today.")], speech, audio)
+    with client.websocket_connect("/ws?conversation=new&speech=local") as ws:
+        ws.receive_json()
+        ws.send_json({"type": "audio", "data": base64.b64encode(to_wav([])).decode()})
+        envelope, _ = _until(ws, "envelope")
+        assert envelope["step"] == 0.04 and isinstance(envelope["values"], list)
+
+
+def test_should_report_persona_style(store):
+    client, _, _ = _client(store, [])
+    assert client.get("/api/persona").json() == {"style": "escanor"}

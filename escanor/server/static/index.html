@@ -15,14 +15,18 @@
     <div class="controls">
       <select id="model" aria-label="Model"></select>
       <label class="toggle"><input type="checkbox" id="speak-typed"> voice replies to text</label>
-      <button id="toggle-log" type="button" aria-pressed="true">Transcript</button>
+      <button id="sound" type="button" aria-pressed="true" title="Sound cues">Sound</button>
+      <button id="toggle-log" type="button" aria-pressed="true" title="Transcript (T)">Transcript</button>
       <button id="new" type="button">New</button>
     </div>
   </header>
 
   <main class="stage">
     <section class="hud" aria-label="Escanor status">
-      <canvas id="core" aria-hidden="true"></canvas>
+      <div class="sun-stack">
+        <canvas id="sun" aria-hidden="true"></canvas>
+        <canvas id="core" aria-hidden="true"></canvas>
+      </div>
       <div class="readout">
         <div id="state-label" class="state-label">BASKING</div>
         <div id="clock" class="clock"></div>
@@ -42,6 +46,7 @@
   </main>
 
   <div id="status" class="status" role="status"></div>
+  <div class="keys" aria-hidden="true"><kbd>Space</kbd> talk · <kbd>⌘K</kbd> type · <kbd>Esc</kbd> interrupt · <kbd>T</kbd> transcript</div>
 
   <form id="composer" class="composer">
     <button id="mic" type="button" aria-label="Hold to talk (or hold Space)" title="Hold to talk (or hold Space)">

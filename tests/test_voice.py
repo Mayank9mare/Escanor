@@ -328,3 +328,27 @@ async def test_ducker_failure_warns_once_without_traceback(caplog):
     assert player.played == [b"one", b"two", b"three"]
     warnings = [r for r in caplog.records if "music volume" in r.getMessage()]
     assert len(warnings) == 1 and warnings[0].exc_info is None
+
+
+# ---------- lip-sync envelope ----------
+
+def test_envelope_follows_loudness():
+    from escanor.voice.envelope import wav_envelope
+    loud = (np.sin(np.linspace(0, 400, 1600)) * 12000).astype(np.int16)
+    quiet = np.zeros(1600, dtype=np.int16)
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as wf:
+        wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(16000)
+        wf.writeframes(np.concatenate([quiet, loud, quiet]).tobytes())
+    values = wav_envelope(buffer.getvalue(), step=0.1)  # 1600 samples per value
+    assert values == [0.0, 1.0, 0.0]
+    assert wav_envelope(b"not a wav") == []
+
+
+async def test_audio_out_reports_each_wav_before_playing():
+    played = []
+    audio = AudioOut(_tts, NullPlayer())
+    audio.on_play = played.append
+    await audio.say("hello there")
+    await audio.close()
+    assert played == [b"hello there"]

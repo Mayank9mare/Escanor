@@ -114,6 +114,8 @@ class AudioOut:
         self._ducker_warned = False
         self._task: asyncio.Task | None = None
         self.on_speaking: Callable[[bool], None] | None = None
+        # Called with each WAV just before it plays (the HUD lip-syncs to it).
+        self.on_play: Callable[[bytes], None] | None = None
 
     # ---------- public ----------
 
@@ -227,6 +229,11 @@ class AudioOut:
                 self._set_ducked(True)
                 if self.on_speaking:
                     self.on_speaking(True)
+                if self.on_play:
+                    try:
+                        self.on_play(wav)
+                    except Exception:  # noqa: BLE001 -- a display hook must never stop speech
+                        pass
                 try:
                     await asyncio.to_thread(self.player.play, wav, self._stop_current)
                     if not item.done.done():

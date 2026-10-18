@@ -57,7 +57,8 @@ body.log-hidden .stage { grid-template-columns: 1fr; }
 body.log-hidden .log-panel { display: none; }
 
 .hud { position: relative; display: grid; place-items: center; min-height: 0; padding: 12px; }
-#core { width: min(68vh, 92vw, 640px); aspect-ratio: 1; }
+.sun-stack { position: relative; width: min(68vh, 92vw, 640px); aspect-ratio: 1; }
+.sun-stack canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .readout { position: absolute; top: 18px; left: 22px; }
 .state-label {
   font-size: 13px; letter-spacing: 0.4em; color: var(--accent); text-shadow: var(--glow);
@@ -102,6 +103,16 @@ body.night { --accent: #d9a066; --glow: 0 0 10px rgb(217 160 102 / 0.25); }
 .tool { font-size: 11px; color: var(--muted); }
 .tool.failed { color: var(--danger); }
 
+.keys { text-align: center; color: var(--muted); font-size: 10px; letter-spacing: 0.12em; opacity: 0.7; }
+kbd { font: inherit; border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; color: var(--text); }
+.msg a { color: var(--accent); }
+.msg code { font: 12px "SF Mono", ui-monospace, monospace; background: rgb(255 176 0 / 0.08); padding: 1px 4px; border-radius: 3px; }
+.msg pre { background: rgb(0 0 0 / 0.35); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; overflow-x: auto; white-space: pre; }
+.msg pre code { background: none; padding: 0; }
+.msg ul, .msg ol { margin: 4px 0; padding-left: 20px; }
+.msg h3 { font-size: 14px; margin: 6px 0 2px; color: var(--accent); }
+.msg p { margin: 0 0 6px; }
+.msg.assistant { white-space: normal; }
 .status { min-height: 18px; text-align: center; color: var(--muted); font-size: 12px; letter-spacing: 0.1em; }
 .composer { display: flex; gap: 10px; padding: 10px 20px 18px; max-width: 980px; width: 100%; justify-self: center; }
 #input {
@@ -125,6 +136,7 @@ dialog .row { display: flex; gap: 8px; justify-content: flex-end; padding: 0 16p
   .log-panel { border-left: 0; border-top: 1px solid var(--line); }
   .toggle { display: none; }
   .ops { display: none; }
+  .keys { display: none; }
   .bar, .composer { padding-left: 16px; padding-right: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
