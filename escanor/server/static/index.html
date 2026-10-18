@@ -8,7 +8,10 @@
 </head>
 <body data-state="idle">
   <header class="bar">
-    <div class="brand"><span class="dot" aria-hidden="true"></span>ESCANOR <span class="ver">v0.1</span></div>
+    <div class="brand">
+      <svg class="sigil" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4M4.6 4.6l2.8 2.8M16.6 16.6l2.8 2.8M4.6 19.4l2.8-2.8M16.6 7.4l2.8-2.8"/></svg>
+      <span>ESCANOR</span><span class="title">THE LION'S SIN OF PRIDE</span>
+    </div>
     <div class="controls">
       <select id="model" aria-label="Model"></select>
       <label class="toggle"><input type="checkbox" id="speak-typed"> voice replies to text</label>
@@ -21,8 +24,12 @@
     <section class="hud" aria-label="Escanor status">
       <canvas id="core" aria-hidden="true"></canvas>
       <div class="readout">
-        <div id="state-label" class="state-label">STANDING BY</div>
+        <div id="state-label" class="state-label">BASKING</div>
         <div id="clock" class="clock"></div>
+        <div class="power" aria-label="Solar power">
+          <div class="power-label"><span id="power-name">SOLAR POWER</span><span id="power-value"></span></div>
+          <div class="power-track"><div id="power-fill" class="power-fill"></div></div>
+        </div>
       </div>
       <p id="caption" class="caption" aria-live="polite"></p>
       <ol id="ops" class="ops" aria-label="Recent actions"></ol>
@@ -40,12 +47,12 @@
     <button id="mic" type="button" aria-label="Hold to talk (or hold Space)" title="Hold to talk (or hold Space)">
       <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12h-2Z"/></svg>
     </button>
-    <input id="input" autocomplete="off" placeholder="Ask Escanor…  (hold Space to talk)">
+    <input id="input" autocomplete="off" placeholder="Speak, and Escanor shall answer…  (hold Space to talk)">
     <button id="send" type="submit">Send</button>
   </form>
 
   <dialog id="confirm">
-    <div class="panel-title">AUTHORISATION REQUIRED</div>
+    <div class="panel-title">BY YOUR LEAVE</div>
     <p id="confirm-text"></p>
     <div class="row">
       <button id="deny" type="button">Deny</button>

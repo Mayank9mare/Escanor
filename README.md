@@ -48,9 +48,13 @@ escanor listen   # hands-free: say "hey Jarvis"
 escanor brief    # morning briefing, then chat
 ```
 
-The HUD is a JARVIS-style core that reacts to you: blue and pulsing with your voice while
-**listening**, violet and spinning while **processing**, amber and rippling while **responding**,
-with live subtitles, a tool readout and a transcript panel.
+The HUD is a living sun, after Escanor, the Lion's Sin of Pride: its **solar power follows the real time
+of day**, rising through the morning, **THE ONE** at high noon, a humble ember after dusk. Its flames pulse
+with your voice while **listening**, burn ember-red while **deliberating**, and throw solar flares while
+**proclaiming**, with live subtitles, a tool readout and a transcript panel.
+
+The personality follows the sun too: proud and regal by day, magnificently confident at noon, polite and
+modest at night, but always accurate and brief. Prefer a neutral assistant? Set `[persona] style = "plain"`.
 
 ## Quickstart
 

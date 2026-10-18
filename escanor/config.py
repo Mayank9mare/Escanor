@@ -51,6 +51,11 @@ DEFAULTS: dict[str, Any] = {
     "agent": {
         "max_steps": 8,
     },
+    "persona": {
+        # "escanor": proud and regal by day, at his peak at high noon, humble at night
+        # (core/persona.py). "plain": a neutral assistant.
+        "style": "escanor",
+    },
     "skills": {
         # Folders containing <skill>/SKILL.md. Earlier folders win on a name clash.
         "dirs": ["~/.escanor/skills", "~/projects/mayank-awesome-skills"],

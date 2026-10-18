@@ -115,6 +115,10 @@ def create_server(app: Escanor, store: SessionStore, speech: Any | None, local_a
     def index() -> FileResponse:
         return FileResponse(STATIC / "index.html")
 
+    @web.get("/api/persona")
+    def persona() -> JSONResponse:
+        return JSONResponse({"style": app.settings["persona"]["style"]})
+
     @web.get("/api/models")
     def models() -> JSONResponse:
         return JSONResponse({"current": app.agent.model_spec, "aliases": app.settings["models"]["aliases"]})

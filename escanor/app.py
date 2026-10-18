@@ -18,6 +18,7 @@ from .brain.tools import BRAIN_GUIDANCE, brain_tools
 from .brain.vault import Vault
 from .core.agent import Agent
 from .core.costs import DailyBudget
+from .core.persona import persona_section
 from .core.router import Router
 from .core.prompts import PromptBuilder
 from .models.base import Model
@@ -93,6 +94,7 @@ def build_app(settings: dict, model: Model, model_spec: str) -> Escanor:
 
     registry = ToolRegistry()
     prompts = PromptBuilder(sections=[
+        lambda: persona_section(settings["persona"]["style"]),
         lambda: UNTRUSTED_GUIDANCE,
         lambda: BRAIN_GUIDANCE,
         vault.facts_section,

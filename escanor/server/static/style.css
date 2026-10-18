@@ -1,23 +1,23 @@
 /* Escanor HUD. Dark by design (it's a heads-up display); colours are tokens. */
 :root {
-  --bg: #04070d;
-  --bg-2: #07111c;
-  --panel: rgb(10 24 38 / 0.72);
-  --line: rgb(79 209 255 / 0.22);
-  --text: #d8f3ff;
-  --muted: #6d93a8;
-  --accent: #4fd1ff;        /* listening / idle */
-  --accent-2: #ffb547;      /* speaking */
-  --think: #9b8cff;         /* thinking */
-  --danger: #ff5d6c;
-  --glow: 0 0 18px rgb(79 209 255 / 0.35);
+  --bg: #0b0503;
+  --bg-2: #160806;
+  --panel: rgb(30 12 6 / 0.72);
+  --line: rgb(255 176 0 / 0.2);
+  --text: #fff1d6;
+  --muted: #b08a63;
+  --accent: #ffb000;        /* sunlight */
+  --accent-2: #ff6a13;      /* flare, while speaking */
+  --think: #ff3d2e;         /* ember, while deliberating */
+  --danger: #ff4d5e;
+  --glow: 0 0 18px rgb(255 176 0 / 0.4);
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 body {
   background:
-    radial-gradient(1200px 700px at 50% 38%, rgb(18 54 82 / 0.55), transparent 70%),
+    radial-gradient(1100px 700px at 50% 38%, rgb(120 40 8 / 0.45), transparent 70%),
     linear-gradient(var(--bg), var(--bg-2));
   color: var(--text);
   font: 15px/1.5 "SF Mono", ui-monospace, Menlo, Consolas, monospace;
@@ -26,7 +26,7 @@ body {
   grid-template-columns: minmax(0, 1fr); /* never wider than the screen */
   overflow: hidden;
 }
-body::after { /* faint scanlines */
+body::after { /* faint heat shimmer lines */
   content: ""; position: fixed; inset: 0; pointer-events: none;
   background: repeating-linear-gradient(transparent 0 2px, rgb(255 255 255 / 0.018) 2px 3px);
 }
@@ -36,20 +36,21 @@ body::after { /* faint scanlines */
   padding: 12px 20px; border-bottom: 1px solid var(--line);
 }
 .brand { letter-spacing: 0.32em; font-weight: 700; display: flex; align-items: center; gap: 10px; text-shadow: var(--glow); }
-.brand .ver { color: var(--muted); letter-spacing: 0.1em; font-weight: 400; font-size: 11px; }
-.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: var(--glow); }
+.brand .title { color: var(--muted); letter-spacing: 0.25em; font-weight: 400; font-size: 10px; }
+.sigil { width: 22px; height: 22px; fill: var(--accent); stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; filter: drop-shadow(0 0 6px rgb(255 176 0 / 0.7)); }
+body.night .sigil { fill: none; opacity: 0.7; filter: none; }
 .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; min-width: 0; }
 #model { max-width: 100%; min-width: 0; }
 .toggle { color: var(--muted); font-size: 12px; display: flex; gap: 6px; align-items: center; }
 
 select, button, input { font: inherit; color: var(--text); }
 select, button {
-  background: rgb(79 209 255 / 0.06); border: 1px solid var(--line); border-radius: 6px;
+  background: rgb(255 176 0 / 0.06); border: 1px solid var(--line); border-radius: 6px;
   padding: 6px 12px; cursor: pointer; letter-spacing: 0.05em;
 }
 button:hover, select:hover { border-color: var(--accent); box-shadow: var(--glow); }
 button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-button.primary, #send { background: rgb(79 209 255 / 0.18); border-color: var(--accent); }
+button.primary, #send { background: rgb(255 176 0 / 0.18); border-color: var(--accent); }
 
 .stage { display: grid; grid-template-columns: 1fr minmax(280px, 380px); min-height: 0; }
 body.log-hidden .stage { grid-template-columns: 1fr; }
@@ -65,6 +66,12 @@ body.log-hidden .log-panel { display: none; }
 body[data-state="thinking"] .state-label { color: var(--think); }
 body[data-state="speaking"] .state-label { color: var(--accent-2); }
 .clock { color: var(--muted); font-size: 12px; letter-spacing: 0.15em; margin-top: 4px; }
+.power { margin-top: 14px; width: 190px; }
+.power-label { display: flex; justify-content: space-between; font-size: 10px; letter-spacing: 0.25em; color: var(--muted); }
+.power-track { margin-top: 5px; height: 4px; background: rgb(255 176 0 / 0.12); border-radius: 2px; overflow: hidden; }
+.power-fill { height: 100%; width: 0; background: linear-gradient(90deg, #c1121f, #ff6a13, #ffd166); box-shadow: 0 0 10px rgb(255 160 0 / 0.8); transition: width 1s; }
+body.the-one #power-name { color: #ffd166; text-shadow: 0 0 10px rgb(255 209 102 / 0.9); }
+body.night { --accent: #d9a066; --glow: 0 0 10px rgb(217 160 102 / 0.25); }
 .caption {
   position: absolute; bottom: 6%; left: 50%; transform: translateX(-50%);
   width: min(760px, 92%); margin: 0; text-align: center;
@@ -98,16 +105,16 @@ body[data-state="speaking"] .state-label { color: var(--accent-2); }
 .status { min-height: 18px; text-align: center; color: var(--muted); font-size: 12px; letter-spacing: 0.1em; }
 .composer { display: flex; gap: 10px; padding: 10px 20px 18px; max-width: 980px; width: 100%; justify-self: center; }
 #input {
-  flex: 1; min-width: 0; background: rgb(79 209 255 / 0.05); border: 1px solid var(--line);
+  flex: 1; min-width: 0; background: rgb(255 176 0 / 0.05); border: 1px solid var(--line);
   border-radius: 8px; padding: 11px 14px;
 }
 #input::placeholder { color: var(--muted); }
 #mic { border-radius: 50%; width: 46px; height: 46px; padding: 0; display: grid; place-items: center; flex: none; }
-#mic.recording { background: rgb(79 209 255 / 0.3); border-color: var(--accent); box-shadow: 0 0 24px rgb(79 209 255 / 0.6); }
+#mic.recording { background: rgb(255 176 0 / 0.3); border-color: var(--accent); box-shadow: 0 0 24px rgb(255 140 0 / 0.7); }
 
 dialog {
-  border: 1px solid var(--accent); border-radius: 10px; background: #071522; color: var(--text);
-  max-width: min(480px, calc(100vw - 32px)); box-shadow: 0 0 40px rgb(79 209 255 / 0.25); padding: 0;
+  border: 1px solid var(--accent); border-radius: 10px; background: #1c0b05; color: var(--text);
+  max-width: min(480px, calc(100vw - 32px)); box-shadow: 0 0 40px rgb(255 140 0 / 0.3); padding: 0;
 }
 dialog p { padding: 4px 16px; }
 dialog::backdrop { background: rgb(0 0 0 / 0.6); }

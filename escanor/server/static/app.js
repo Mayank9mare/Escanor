@@ -1,4 +1,6 @@
-// Escanor HUD: one WebSocket per tab (protocol in server/app.py) + an animated core.
+// Escanor HUD: one WebSocket per tab (protocol in server/app.py) + a living sun.
+// Like the Lion's Sin of Pride, its power follows the real sun: rising through the
+// morning, "THE ONE" at high noon, a humble ember after dusk.
 "use strict";
 
 const $ = (id) => document.getElementById(id);
@@ -9,13 +11,14 @@ let player = null, playerAnalyser = null;
 
 // ---------- state: idle | listening | thinking | speaking ----------
 
-const LABELS = { idle: "STANDING BY", listening: "LISTENING", thinking: "PROCESSING", speaking: "RESPONDING" };
+const LABELS = { listening: "LISTENING", thinking: "DELIBERATING", speaking: "PROCLAIMING" };
+const IDLE_LABEL = { day: "BASKING IN THE SUN", noon: "THE ONE", night: "RESTING" };
 let state = "idle", serverSpeaking = false;
 
 function setState(next) {
   state = next;
   document.body.dataset.state = next;
-  $("state-label").textContent = LABELS[next];
+  $("state-label").textContent = next === "idle" ? IDLE_LABEL[sun.phase] : LABELS[next];
 }
 
 function settle() {
@@ -263,16 +266,37 @@ function stopAudio() {
   if (player) { player.pause(); player = null; playerAnalyser = null; }
 }
 
-// ---------- the core ----------
+// ---------- the sun ----------
 
 const canvas = $("core"), ctx = canvas.getContext("2d");
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const PALETTE = {
-  idle: [79, 209, 255], listening: [79, 209, 255], thinking: [155, 140, 255], speaking: [255, 181, 71],
+  idle: [255, 176, 0], listening: [255, 205, 90], thinking: [255, 72, 40], speaking: [255, 120, 20],
+  night: [205, 140, 90],
 };
 const bins = new Uint8Array(128);
+const RAYS = 96;
+const rays = new Float32Array(RAYS);
 let colour = [...PALETTE.idle], level = 0, spin = 0, sweep = 0, last = performance.now();
-const bars = new Float32Array(72);
+const sun = { phase: "day", power: 0.6 };
+
+function solar(now = new Date()) {
+  // 0..1 power from the time of day: rises from 06:00, peaks at 12:00, sets at 18:00.
+  const hours = now.getHours() + now.getMinutes() / 60;
+  if (hours >= 11.5 && hours < 12.5) return { phase: "noon", power: 1 };
+  if (hours < 6 || hours >= 18) return { phase: "night", power: 0.08 };
+  return { phase: "day", power: 0.15 + 0.85 * Math.sin(((hours - 6) / 12) * Math.PI) };
+}
+
+function updateSun() {
+  Object.assign(sun, solar());
+  document.body.classList.toggle("night", sun.phase === "night");
+  document.body.classList.toggle("the-one", sun.phase === "noon");
+  $("power-name").textContent = sun.phase === "noon" ? "THE ONE" : sun.phase === "night" ? "SUN HAS SET" : "SOLAR POWER";
+  $("power-value").textContent = sun.phase === "noon" ? "MAX" : `${Math.round(sun.power * 100)}%`;
+  $("power-fill").style.width = `${Math.round(sun.power * 100)}%`;
+  if (state === "idle") $("state-label").textContent = IDLE_LABEL[sun.phase];
+}
 
 function amplitude(t) {
   // Real audio when we have it (mic, or browser playback); otherwise a voice-like envelope.
@@ -284,8 +308,8 @@ function amplitude(t) {
     return Math.min(1, sum / (62 * 160));
   }
   if (state === "speaking") return 0.35 + 0.3 * Math.abs(Math.sin(t * 7.3) * Math.sin(t * 3.1 + 1)) + 0.15 * Math.random();
-  if (state === "thinking") return 0.18;
-  return 0.06 + 0.04 * Math.sin(t * 1.4);
+  if (state === "thinking") return 0.22;
+  return 0.06 + 0.04 * Math.sin(t * 1.2);
 }
 
 function resize() {
@@ -296,7 +320,7 @@ function resize() {
 }
 window.addEventListener("resize", resize);
 
-function rgba(alpha) { return `rgba(${colour[0] | 0}, ${colour[1] | 0}, ${colour[2] | 0}, ${alpha})`; }
+function rgba(alpha, c = colour) { return `rgba(${c[0] | 0}, ${c[1] | 0}, ${c[2] | 0}, ${alpha})`; }
 
 function arc(r, start, length, width, alpha) {
   ctx.beginPath();
@@ -312,74 +336,102 @@ function draw(now) {
   const t = now / 1000;
   const size = canvas.getBoundingClientRect().width;
   const R = size / 2;
-  const target = PALETTE[state];
-  colour = colour.map((c, i) => c + (target[i] - c) * Math.min(1, dt * 4));
+  const night = sun.phase === "night";
+  const target = state === "idle" && night ? PALETTE.night : PALETTE[state];
+  colour = colour.map((c, i) => c + (target[i] - c) * Math.min(1, dt * 3));
   level += (amplitude(t) - level) * Math.min(1, dt * (state === "speaking" ? 14 : 8));
-  const speed = reduceMotion ? 0.15 : { idle: 0.25, listening: 0.6, thinking: 2.4, speaking: 0.9 }[state];
-  spin += dt * speed;
-  sweep += dt * (state === "thinking" ? 3.2 : 0.8) * (reduceMotion ? 0.2 : 1);
+  const power = state === "idle" ? sun.power : Math.max(sun.power, 0.55);  // he rises to the occasion
+  const motion = reduceMotion ? 0.2 : 1;
+  spin += dt * motion * { idle: 0.08, listening: 0.2, thinking: 1.6, speaking: 0.35 }[state];
+  sweep += dt * motion * (state === "thinking" ? 3 : 0.6);
 
   ctx.clearRect(0, 0, size, size);
   ctx.save();
   ctx.translate(R, R);
 
-  // core glow
-  const coreR = R * (0.2 + 0.07 * level);
-  const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, coreR * 2.4);
+  // corona: flickering flame rays, longer with solar power and voice
+  const base = R * (0.17 + 0.07 * power + 0.05 * level);
+  for (let i = 0; i < RAYS; i++) {
+    const angle = (i / RAYS) * Math.PI * 2 + spin;
+    const flicker = 0.55 + 0.45 * Math.sin(t * (2.1 + (i % 7) * 0.37) + i * 2.3) * Math.sin(t * 1.3 + i * 0.9);
+    const targetLen = R * (0.03 + power * 0.16 * flicker + level * 0.22 * (0.4 + flicker));
+    rays[i] += (targetLen - rays[i]) * Math.min(1, dt * 10);
+    const r0 = base * 1.05, r1 = r0 + rays[i] * (i % 2 ? 0.65 : 1);
+    const gradient = ctx.createLinearGradient(Math.cos(angle) * r0, Math.sin(angle) * r0, Math.cos(angle) * r1, Math.sin(angle) * r1);
+    gradient.addColorStop(0, rgba(0.9 * (0.4 + power * 0.6)));
+    gradient.addColorStop(1, rgba(0));
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(angle) * r0, Math.sin(angle) * r0);
+    ctx.lineTo(Math.cos(angle) * r1, Math.sin(angle) * r1);
+    ctx.lineWidth = i % 2 ? 1.5 : 3;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = gradient;
+    ctx.stroke();
+  }
+
+  // solar flares while proclaiming
+  if (state === "speaking" && !reduceMotion) {
+    for (let k = 0; k < 3; k++) {
+      const a = t * 0.7 + k * 2.1;
+      const reach = R * (0.45 + 0.12 * Math.sin(t * 3 + k) + level * 0.15);
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * base, Math.sin(a) * base);
+      ctx.quadraticCurveTo(Math.cos(a + 0.35) * reach, Math.sin(a + 0.35) * reach, Math.cos(a + 0.7) * base, Math.sin(a + 0.7) * base);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = rgba(0.35 + level * 0.4);
+      ctx.stroke();
+    }
+  }
+
+  // the sun itself
+  const glowR = base * (2.2 + power);
+  const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, glowR);
   glow.addColorStop(0, rgba(0.95));
-  glow.addColorStop(0.25, rgba(0.55));
-  glow.addColorStop(0.6, rgba(0.12));
+  glow.addColorStop(0.3, rgba(0.45 + 0.3 * power));
+  glow.addColorStop(0.65, rgba(0.1 + 0.1 * power));
   glow.addColorStop(1, rgba(0));
   ctx.fillStyle = glow;
   ctx.beginPath();
-  ctx.arc(0, 0, coreR * 2.4, 0, Math.PI * 2);
+  ctx.arc(0, 0, glowR, 0, Math.PI * 2);
   ctx.fill();
+  const disc = ctx.createRadialGradient(-base * 0.25, -base * 0.25, base * 0.1, 0, 0, base);
+  disc.addColorStop(0, night && state === "idle" ? "rgba(255, 214, 170, 0.85)" : "rgba(255, 251, 235, 1)");
+  disc.addColorStop(0.55, rgba(1, night && state === "idle" ? [230, 150, 90] : [255, 214, 102]));
+  disc.addColorStop(1, rgba(0.9));
+  ctx.fillStyle = disc;
   ctx.beginPath();
-  ctx.arc(0, 0, coreR * 0.55, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(235, 250, 255, 0.92)";
+  ctx.arc(0, 0, base, 0, Math.PI * 2);
   ctx.fill();
 
-  // inner segmented ring (rotates)
-  for (let i = 0; i < 12; i++) arc(R * 0.36, spin + i * (Math.PI / 6), Math.PI / 9, 3, 0.55);
-
-  // radial audio bars
-  for (let i = 0; i < bars.length; i++) {
-    const angle = (i / bars.length) * Math.PI * 2 - Math.PI / 2;
-    const wobble = 0.5 + 0.5 * Math.sin(t * 6 + i * 0.7) * Math.sin(t * 2.3 + i * 1.3);
-    const targetLen = R * (0.02 + level * (0.12 + 0.12 * wobble));
-    bars[i] += (targetLen - bars[i]) * Math.min(1, dt * 12);
-    const r0 = R * 0.46;
-    ctx.beginPath();
-    ctx.moveTo(Math.cos(angle) * r0, Math.sin(angle) * r0);
-    ctx.lineTo(Math.cos(angle) * (r0 + bars[i]), Math.sin(angle) * (r0 + bars[i]));
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = rgba(0.75);
-    ctx.stroke();
-  }
-
-  // tick ring with a sweeping highlight
-  const ticks = 120, r1 = R * 0.74;
+  // sundial ring: hour marks, with a sweep while deliberating
+  const ticks = 72, r1 = R * 0.78;
   for (let i = 0; i < ticks; i++) {
     const angle = (i / ticks) * Math.PI * 2;
     const distance = Math.abs(((angle - (sweep % (Math.PI * 2)) + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
-    const lit = Math.max(0, 1 - distance / 0.9);
-    const long = i % 10 === 0;
+    const lit = Math.max(0, 1 - distance / 0.8);
+    const long = i % 6 === 0;
     ctx.beginPath();
     ctx.moveTo(Math.cos(angle) * r1, Math.sin(angle) * r1);
-    ctx.lineTo(Math.cos(angle) * (r1 - (long ? 10 : 5)), Math.sin(angle) * (r1 - (long ? 10 : 5)));
+    ctx.lineTo(Math.cos(angle) * (r1 - (long ? 12 : 5)), Math.sin(angle) * (r1 - (long ? 12 : 5)));
     ctx.lineWidth = long ? 2 : 1;
-    ctx.strokeStyle = rgba(0.18 + 0.75 * lit);
+    ctx.strokeStyle = rgba(0.15 + 0.7 * lit);
     ctx.stroke();
   }
+  // the sun's place on the dial right now (noon at the top)
+  const d = new Date();
+  // midnight at the bottom, sunrise left, noon top, sunset right (canvas angles run clockwise)
+  const dayAngle = ((d.getHours() + d.getMinutes() / 60) / 24) * Math.PI * 2 - Math.PI * 1.5;
+  ctx.beginPath();
+  ctx.arc(Math.cos(dayAngle) * r1, Math.sin(dayAngle) * r1, 4, 0, Math.PI * 2);
+  ctx.fillStyle = rgba(0.95);
+  ctx.fill();
 
-  // outer counter-rotating arcs
-  arc(R * 0.86, -spin * 0.6, Math.PI * 0.55, 2, 0.6);
-  arc(R * 0.86, -spin * 0.6 + Math.PI, Math.PI * 0.35, 2, 0.45);
-  arc(R * 0.93, spin * 0.35 + 1, Math.PI * 0.2, 1, 0.35);
-  arc(R * 0.93, spin * 0.35 + 3.5, Math.PI * 0.6, 1, 0.25);
-  // thin full rings
-  arc(R * 0.6, 0, Math.PI * 2, 1, 0.12);
-  arc(R * 0.97, 0, Math.PI * 2, 1, 0.08);
+  // outer arcs, turning slowly the other way
+  arc(R * 0.88, -spin * 0.8, Math.PI * 0.5, 2, 0.5);
+  arc(R * 0.88, -spin * 0.8 + Math.PI, Math.PI * 0.3, 2, 0.35);
+  arc(R * 0.95, spin * 0.5 + 1, Math.PI * 0.25, 1, 0.3);
+  arc(R * 0.95, spin * 0.5 + 3.6, Math.PI * 0.55, 1, 0.22);
+  arc(R * 0.62, 0, Math.PI * 2, 1, 0.1);
 
   ctx.restore();
   requestAnimationFrame(draw);
@@ -389,6 +441,7 @@ function tickClock() {
   $("clock").textContent = new Date().toLocaleString(undefined, {
     weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit",
   }).toUpperCase();
+  updateSun();
 }
 
 resize();
