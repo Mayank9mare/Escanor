@@ -37,6 +37,21 @@ escanor â€º In plain words: attention lets every word look at every other wordâ€
 Anything that acts outside the conversation (creating a reminder, adding an event, opening a link)
 **asks you first**. Music control, notes and timers don't.
 
+## Run it
+
+Already installed? Then it's one command:
+
+```bash
+escanor          # chat in the terminal
+escanor serve    # the HUD in your browser at http://127.0.0.1:8770: hold Space (or the mic) to talk
+escanor listen   # hands-free: say "hey Jarvis"
+escanor brief    # morning briefing, then chat
+```
+
+The HUD is a JARVIS-style core that reacts to you: blue and pulsing with your voice while
+**listening**, violet and spinning while **processing**, amber and rippling while **responding**,
+with live subtitles, a tool readout and a transcript panel.
+
 ## Quickstart
 
 Needs macOS, Python 3.12 and [uv](https://docs.astral.sh/uv/).
@@ -45,12 +60,15 @@ Needs macOS, Python 3.12 and [uv](https://docs.astral.sh/uv/).
 git clone https://github.com/Mayank9mare/Escanor.git && cd Escanor
 uv venv --python 3.12
 uv pip install -e ".[all-models,dev]"
-cp .env.example .env        # add ANTHROPIC_API_KEY (or GEMINI_API_KEY / OPENAI_API_KEY)
-.venv/bin/escanor           # text chat in the terminal
+mkdir -p ~/.escanor && cp .env.example ~/.escanor/.env   # add ANTHROPIC_API_KEY (or GEMINI_API_KEY / OPENAI_API_KEY)
+ln -s "$PWD/.venv/bin/escanor" ~/.local/bin/escanor       # optional: `escanor` from anywhere
+escanor                                                   # text chat in the terminal
 ```
 
-No key yet? `.venv/bin/escanor --model mock` runs everything with a fake model.
-Using Gemini's free tier? `.venv/bin/escanor --model gemini`.
+Keys go in `~/.escanor/.env` so they're found wherever you run Escanor (a `.env` in the current folder works too).
+
+No key yet? `escanor --model mock` runs everything with a fake model.
+Only a Gemini key? Put `[models]` / `default = "gemini"` in `~/.escanor/config.toml` (free tier: `gemini-3.5-flash-lite`).
 
 ## Voice
 
