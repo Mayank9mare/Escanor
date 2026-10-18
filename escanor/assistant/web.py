@@ -165,8 +165,9 @@ def fetch_text(url: str, allow_private: bool = False, resolve: Resolver = _resol
 class WebSearchTool(Tool):
     name = "web_search"
     description = (
-        "Search the web; returns titles, URLs and snippets. Use it for anything recent or that you "
-        "aren't confident about. Don't search for greetings, small talk, simple maths or well-known facts."
+        "Search the web; returns titles, URLs and short snippets only. Use it for anything recent or that "
+        "you aren't confident about; when the snippets don't contain the answer, read the best result with "
+        "web_fetch. For news, use news_headlines instead. Don't search for small talk or well-known facts."
     )
     input_schema = {
         "type": "object",

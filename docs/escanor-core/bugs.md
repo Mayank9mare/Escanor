@@ -25,6 +25,8 @@ Fixed bugs stay here (struck through) as an audit trail. IDs never get reused.
 | ~~B16~~ | ~~MEDIUM~~ | ~~`escanor eval` graded API errors (e.g. rate limits) as wrong tool choices~~ | ✅ FIXED | live Gemini test | live test |
 | ~~B17~~ | ~~MEDIUM~~ | ~~Tests that start the app could poll the real Calendar (macOS prompt)~~ | ✅ FIXED | review while adding proactive mode | same step |
 | ~~B18~~ | ~~LOW~~ | ~~Evening wrap-up never fired when set after 22:00~~ | ✅ FIXED | code review | same step |
+| ~~B19~~ | ~~LOW~~ | ~~A traceback per reply when YouTube Music isn't connected~~ | ✅ FIXED | you, first `escanor serve` | 2026-10-18 |
+| ~~B20~~ | ~~MEDIUM~~ | ~~"Latest news" gave no headlines~~ | ✅ FIXED | you, first real use | 2026-10-18 |
 
 Severity: **HIGH** = data loss, wrong result, security, blocks testing/release · **MEDIUM** =
 breaks an edge case or error path · **LOW** = minor or cosmetic.
@@ -177,6 +179,27 @@ breaks an edge case or error path · **LOW** = minor or cosmetic.
 - **Root cause:** the two-hour window was compared as clock times; for 23:00 its end (01:00) is "earlier".
 - **Fix:** compare full datetimes ([proactive.py `_evening`](../../escanor/assistant/proactive.py)).
 - **Regression test:** [test_late_evening_wrap_still_fires](../../tests/test_proactive.py)
+
+### ~~B19. A traceback per reply when YouTube Music isn't connected~~
+
+- **Severity:** LOW · **Found:** 2026-10-18, by you · **Fixed:** same day
+- **Root cause:** `AudioOut` turns the music down on every utterance; with no YouTube Music token, `PlayerDucker`
+  raised `PlayerNotAuthorized` and `AudioOut` logged a full traceback each time. Speech itself worked.
+- **Fix:** not connected / app closed is a normal state, so ducking does nothing
+  ([player.py `PlayerDucker`](../../escanor/music/player.py)); any other ducker failure is logged once, one line
+  ([audio_out.py `_set_ducked`](../../escanor/voice/audio_out.py)).
+- **Regression tests:** [test_ducker_is_silent_when_music_not_connected](../../tests/test_music.py),
+  [test_ducker_failure_warns_once_without_traceback](../../tests/test_voice.py)
+
+### ~~B20. "Latest news" gave no headlines~~
+
+- **Severity:** MEDIUM · **Found:** 2026-10-18, by you · **Fixed:** same day
+- **Root cause:** `web_search` worked, but "latest news" matches news sites' front pages (Google News, CBS World)
+  whose snippets have no stories, and the model didn't open any page, so it answered "no specifics".
+- **Fix:** a `news_headlines` tool on Google News RSS (dated headlines + source, region `[assistant] news_region`),
+  in core and in the morning briefing ([news.py](../../escanor/assistant/news.py)); `web_search` now says its
+  results are snippets and to `web_fetch` when they don't answer. Verified live on Gemini: real headlines.
+- **Regression tests:** [test_news.py](../../tests/test_news.py)
 
 ---
 

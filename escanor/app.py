@@ -186,6 +186,10 @@ def install_assistant(escanor: Escanor) -> None:
     briefing.add("Calendar today", lambda: format_events(apple.events(midnight(), 1)))
     briefing.add("Reminders", lambda: due_today_first(apple.reminders(), apple.now().date().isoformat()))
     briefing.add("Timers", lambda: "\n".join(timers.describe(t) for t in timers.timers.values()))
+    from .assistant.news import News, NewsTool
+    news = News(escanor.settings["assistant"].get("news_region", "IN:en"))
+    escanor.agent.tools.add(NewsTool(news))
+    briefing.add("Top headlines", lambda: news.text(limit=5))
     city = escanor.settings["assistant"].get("city")
     if city:
         briefing.add(f"Weather in {city}", weather_source(web_search, city))

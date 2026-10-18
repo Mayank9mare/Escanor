@@ -111,6 +111,7 @@ class AudioOut:
         self._current: _Item | None = None
         self._holds = 0
         self._ducked = False
+        self._ducker_warned = False
         self._task: asyncio.Task | None = None
         self.on_speaking: Callable[[bool], None] | None = None
 
@@ -192,8 +193,10 @@ class AudioOut:
             return
         try:
             self.ducker.duck() if ducked else self.ducker.restore()
-        except Exception:  # noqa: BLE001 -- music control failing must never stop speech
-            log.exception("ducker failed")
+        except Exception as e:  # noqa: BLE001 -- music control failing must never stop speech
+            if not self._ducker_warned:  # once, one line: this runs on every utterance (B19)
+                self._ducker_warned = True
+                log.warning("Couldn't adjust the music volume (%s: %s); speech continues.", type(e).__name__, e)
         self._ducked = ducked
 
     async def _run(self) -> None:

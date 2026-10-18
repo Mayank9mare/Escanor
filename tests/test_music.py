@@ -340,3 +340,14 @@ async def test_dj_start_runs_through_agent_as_async_tool(tmp_path, store):
     assert finished.result.ok and "rainy day" in finished.result.output
     assert dj.running
     await dj.stop()
+
+
+def test_ducker_is_silent_when_music_not_connected(tmp_path):
+    """B19: no token / app closed is normal; ducking just does nothing."""
+    not_connected = YouTubeMusicPlayer("http://127.0.0.1:9", token_path=tmp_path / "missing", timeout=1)
+    ducker = PlayerDucker(not_connected)
+    ducker.duck()
+    ducker.restore()
+    closed_app = YouTubeMusicPlayer("http://127.0.0.1:9", token_path=tmp_path / "t", timeout=1)
+    closed_app.token_path.write_text("x")
+    PlayerDucker(closed_app).duck()

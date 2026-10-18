@@ -189,12 +189,20 @@ class PlayerDucker:
         self._saved: int | None = None
 
     def duck(self) -> None:
-        current = self._player.volume()
-        if current > self._level:
-            self._saved = current
-            self._player.set_volume(self._level)
+        # Not connected / app not open is a normal state: there's simply no
+        # music to turn down, so do nothing rather than complain (B19).
+        try:
+            current = self._player.volume()
+            if current > self._level:
+                self._saved = current
+                self._player.set_volume(self._level)
+        except (PlayerNotAuthorized, PlayerUnavailable):
+            self._saved = None
 
     def restore(self) -> None:
         if self._saved is not None:
             saved, self._saved = self._saved, None
-            self._player.set_volume(saved)
+            try:
+                self._player.set_volume(saved)
+            except (PlayerNotAuthorized, PlayerUnavailable):
+                pass

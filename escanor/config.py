@@ -88,6 +88,7 @@ DEFAULTS: dict[str, Any] = {
         "enabled": True,      # Apple Reminders/Calendar, Mac actions, timers, briefing
         "city": "",           # for the weather in the morning briefing, e.g. "Bengaluru"
         "screen": True,       # look_at_screen: screenshot -> model (asks first each time)
+        "news_region": "IN:en",  # Google News edition, country:language (e.g. "US:en", "IN:hi")
     },
     "proactive": {
         "enabled": True,              # Escanor speaks up on its own (see assistant/proactive.py)

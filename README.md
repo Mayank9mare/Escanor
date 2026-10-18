@@ -25,7 +25,7 @@ escanor › In plain words: attention lets every word look at every other word�
 |---|---|---|
 | **Chat & models** | "switch to sonnet", "think hard about…" | Claude Haiku by default; Sonnet, GPT, Gemini, Ollama; switch any time, mid-conversation |
 | **Second brain** | "what did I write about project X?", "remember that…" | Markdown notes in `~/.escanor/brain`, keyword + semantic search, a `facts.md` it always keeps in mind |
-| **Web** | "what's the latest on…?", "read this link" | DuckDuckGo search, page reading; web text is treated as data, never instructions |
+| **Web & news** | "what's in the news?", "latest on…?", "read this link" | Google News headlines, DuckDuckGo search, page reading; web text is treated as data, never instructions |
 | **Voice** | hold the mic, or say "hey Jarvis" | Whisper (speech-to-text) and Piper (voice), both local; replies spoken sentence by sentence |
 | **AI DJ** | "DJ mode, chill evening", "skip", "who is this?" | YouTube Music desktop app + your history and likes; short spoken intros between songs |
 | **Assistant** | "remind me to call mom at 7", "what's on today?", "good morning" | Apple Reminders and Calendar, timers, notifications, morning briefing |

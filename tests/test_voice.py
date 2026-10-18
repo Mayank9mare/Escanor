@@ -310,3 +310,21 @@ async def test_listen_loop_drops_chime_audio_before_recording():
     assert await loop.once() != ""
     assert frames.drained >= 2 and heard
     await audio.close()
+
+
+async def test_ducker_failure_warns_once_without_traceback(caplog):
+    """B19: a failing ducker ran on every utterance and printed a traceback each time."""
+    class Broken:
+        def duck(self): raise RuntimeError("volume API down")
+        def restore(self): raise RuntimeError("volume API down")
+
+    player = NullPlayer()
+    audio = AudioOut(_tts, player, Broken())
+    with caplog.at_level("WARNING"):
+        for word in ("one", "two", "three"):
+            await audio.say(word)
+        await audio.wait_idle(2)
+    await audio.close()
+    assert player.played == [b"one", b"two", b"three"]
+    warnings = [r for r in caplog.records if "music volume" in r.getMessage()]
+    assert len(warnings) == 1 and warnings[0].exc_info is None
