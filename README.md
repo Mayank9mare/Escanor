@@ -30,6 +30,9 @@ escanor › In plain words: attention lets every word look at every other word�
 | **AI DJ** | "DJ mode, chill evening", "skip", "who is this?" | YouTube Music desktop app + your history and likes; short spoken intros between songs |
 | **Assistant** | "remind me to call mom at 7", "what's on today?", "good morning" | Apple Reminders and Calendar, timers, notifications, morning briefing |
 | **Research tutor** | "explain this paper <arXiv / link / PDF>" | Saves it to the brain, then teaches with the [learn-anything](https://github.com/Mayank9mare/mayank-awesome-skills) skill, with spaced review |
+| **Any service (MCP)** | "check my GitHub notifications", "search Notion for…" | Plug in any [MCP](https://modelcontextprotocol.io) server: Gmail, Notion, GitHub, Slack, Drive… |
+| **Proactive** | (it speaks first) | Meeting heads-ups with your related notes, an evening wrap-up, break nudges; quiet hours |
+| **Your screen** | "what's on my screen?", "explain this error" | Screenshot to the model, after you say yes |
 
 Anything that acts outside the conversation (creating a reminder, adding an event, opening a link)
 **asks you first**. Music control, notes and timers don't.
@@ -72,6 +75,29 @@ Pressing the mic, or sending a message while Escanor is talking, interrupts it. 
 
 The DJ picks each next song from YouTube Music's radio and your likes, introduces some of them, and
 turns the music down whenever Escanor talks or listens.
+
+## Connect any service (MCP)
+
+Add [MCP](https://modelcontextprotocol.io) servers to `~/.escanor/config.toml`; each becomes a tool group:
+
+```toml
+[mcp.servers.github]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-github"]
+env = { GITHUB_PERSONAL_ACCESS_TOKEN = "env:GITHUB_TOKEN" }   # read from your environment / .env
+auto_approve = ["search_*", "get_*"]                            # run these without asking
+
+[mcp.servers.notes]
+url = "https://example.com/mcp"                                 # remote servers work too
+```
+
+Tools the server marks read-only run straight away; anything else asks first. `/mcp` shows what's connected.
+
+## Proactive mode
+
+While `escanor serve`, `listen` or the chat is running, Escanor speaks up on its own: a heads-up 10 minutes
+before a calendar event (with your related note), an evening wrap-up at 21:00, and a nudge after two hours at
+the keyboard. Quiet hours (22:30–07:30) and "be quiet for an hour" keep it polite; tune it under `[proactive]`.
 
 ## Research papers
 

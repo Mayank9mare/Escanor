@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 from typing import Iterator
 from .base import Model, ModelResponse, StreamEvent, ToolCall
+from .images import FOLLOW_UP_TEXT, tool_images
 
 
 class OpenAIModel(Model):
@@ -181,4 +182,31 @@ class OpenAIModel(Model):
 
             elif m["role"] == "tool":
                 openai_messages.append({"role": "tool", "tool_call_id": m["tool_call_id"], "content": m["content"]})
-        return openai_messages
+        return _with_image_follow_ups(messages, openai_messages)
+
+
+def _with_image_follow_ups(messages: list[dict], converted: list[dict]) -> list[dict]:
+    """OpenAI-style tool messages are text-only: after each run of tool
+    results, add one user message carrying their images (models/images.py).
+    `converted` has exactly one entry per message in `messages`, so the two
+    are walked side by side."""
+    if not any(m.get("images") for m in messages if m["role"] == "tool"):
+        return converted
+    out: list[dict] = []
+    pending: list[tuple[str, str]] = []
+    for original, entry in zip(messages, converted):
+        if original["role"] != "tool" and pending:
+            out.append(_image_message(pending))
+            pending = []
+        out.append(entry)
+        if original["role"] == "tool":
+            pending += tool_images([original])
+    if pending:
+        out.append(_image_message(pending))
+    return out
+
+
+def _image_message(images: list[tuple[str, str]]) -> dict:
+    content: list[dict] = [{"type": "text", "text": FOLLOW_UP_TEXT}]
+    content += [{"type": "image_url", "image_url": {"url": f"data:{media};base64,{data}"}} for media, data in images]
+    return {"role": "user", "content": content}

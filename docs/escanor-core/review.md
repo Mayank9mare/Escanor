@@ -1,7 +1,7 @@
 # Escanor core — Review Guide
 
-**Branch:** `main` · **Scope:** Phases 1–8, the whole implementation plan ·
-**Tests:** 233 passing · **Live:** Gemini 10/10 tool choice · **Updated:** 2026-10-17
+**Branch:** `main` · **Scope:** Phases 1–8 + MCP connectors, proactive mode, screen ·
+**Tests:** 261 passing · **Live:** Gemini 10/10 tool choice · **Updated:** 2026-10-17
 
 ## TL;DR (read this first)
 
@@ -56,8 +56,11 @@ Read in this order: it follows a message from the model interface up to the term
 | 33 | [research/reviews.py](../../escanor/research/reviews.py), [research/tools.py](../../escanor/research/tools.py) | Reviews due; research tools | sources fenced everywhere ([D35](decision.md#d35-ingested-sources-stay-untrusted-inside-the-brain)) | 200 |
 | 34 | [core/router.py](../../escanor/core/router.py), [core/costs.py](../../escanor/core/costs.py) | Escalation, spend cap | hand-back in `finally`; cap checked before each call | 160 |
 | 35 | [ops.py](../../escanor/ops.py) | service, backup, eval | eval never runs real tools ([D41](decision.md#d41-evals-grade-tool-choice-with-stubbed-tools)) | 170 |
-| 36 | [cli.py](../../escanor/cli.py) | Terminal chat | `StdinLines` ([B8](bugs.md)); Ctrl-C cancels only the turn | 270 |
-| 37 | [tests/](../../tests/) | 232 offline tests | error paths, not just happy paths | — |
+| 36 ⭐ | [connectors/mcp_client.py](../../escanor/connectors/mcp_client.py) | Plugs in Gmail/Notion/GitHub-style MCP servers | read-only hint → no prompt; everything else asks ([D42](decision.md#d42-mcp-tools-permission-from-the-servers-read-only-hint-otherwise-ask)) | 210 |
+| 37 | [assistant/proactive.py](../../escanor/assistant/proactive.py) | Speaks up on its own | quiet hours, cap, announce-once ([D44](decision.md#d44-proactive-checks-are-local-and-rule-based-no-model-calls)) | 230 |
+| 38 | [assistant/screen.py](../../escanor/assistant/screen.py), [models/images.py](../../escanor/models/images.py) | Screenshots to the model | asks first, names the model ([D45](decision.md#d45-screenshots-ask-first-and-stay-in-history-as-files)) | 140 |
+| 39 | [cli.py](../../escanor/cli.py) | Terminal chat | `StdinLines` ([B8](bugs.md)); Ctrl-C cancels only the turn | 270 |
+| 40 | [tests/](../../tests/) | 261 offline tests | error paths, not just happy paths | — |
 
 Skip or skim: [telemetry.py](../../escanor/telemetry.py) (copied, path renamed),
 [assistant/web_search.py](../../escanor/assistant/web_search.py) (copied DuckDuckGo scraper).
@@ -166,6 +169,9 @@ in a new conversation from facts.md without a tool call.
 | YouTube Music app control + DJ | install th-ch app, `escanor music connect`, "DJ mode, chill evening" |
 | Reminders/Calendar | "what's on today?" (approve the macOS Automation prompt) |
 | Mic, wake word, barge-in | `uv pip install -e ".[listen]"`, `escanor listen` (headphones for barge-in) |
+| MCP with a real service | add e.g. `[mcp.servers.github]`, run `escanor`, `/mcp` |
+| Screen | "what's on my screen?" (grant Screen Recording once) |
+| Proactive | leave `escanor serve` running before a calendar event |
 | Echo test (Phase 0) | speakers + music on, see if `listen` hears itself |
 
 ## How to verify locally

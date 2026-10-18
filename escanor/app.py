@@ -44,6 +44,22 @@ class Escanor:
     vault: Vault
     index: BrainIndex
     services: dict[str, object] = field(default_factory=dict)
+    # Async setup/teardown for things that live in the event loop (MCP
+    # connections, proactive mode). Every interface awaits start() once
+    # its loop is running and stop() before it exits, from the same task.
+    on_start: list = field(default_factory=list)
+    on_stop: list = field(default_factory=list)
+
+    async def start(self) -> None:
+        for hook in self.on_start:
+            await hook()
+
+    async def stop(self) -> None:
+        for hook in reversed(self.on_stop):
+            try:
+                await hook()
+            except Exception:  # noqa: BLE001 -- one failing shutdown mustn't skip the rest
+                pass
 
 
 def build_model(name: str, settings: dict) -> tuple[Model, str]:
@@ -117,7 +133,19 @@ def build_app(settings: dict, model: Model, model_spec: str) -> Escanor:
         install_assistant(escanor)
     if settings["research"]["enabled"]:
         install_research(escanor)
+    if settings["mcp"]["servers"]:
+        install_mcp(escanor)
     return escanor
+
+
+def install_mcp(escanor: Escanor) -> None:
+    """MCP servers from [mcp.servers.*]; connected when the interface starts."""
+    from .connectors.mcp_client import MCPManager
+    manager = MCPManager(escanor.settings["mcp"]["servers"], escanor.agent.tools, GROUP_DESCRIPTIONS,
+                         log_dir=config.data_dir() / "logs")
+    escanor.services["mcp"] = manager
+    escanor.on_start.append(manager.start)
+    escanor.on_stop.append(manager.stop)
 
 
 def install_research(escanor: Escanor) -> None:
@@ -166,7 +194,34 @@ def install_assistant(escanor: Escanor) -> None:
     for tool in (*apple_tools(apple), SetTimerTool(timers), TimersListTool(timers), TimerCancelTool(timers),
                  BriefingTool(briefing)):
         escanor.agent.tools.add(tool)
+    if escanor.settings["assistant"].get("screen", True):
+        from .assistant.screen import LookAtScreenTool, Screen
+        screen = Screen(config.data_dir() / "screens")
+        escanor.agent.tools.add(LookAtScreenTool(screen, lambda: escanor.agent.model_spec))
     escanor.services.update(apple=apple, timers=timers, briefing=briefing)
+    if escanor.settings["proactive"]["enabled"]:
+        install_proactive(escanor, apple, timers)
+
+
+def install_proactive(escanor: Escanor, apple, timers) -> None:
+    """Meeting heads-ups, evening wrap-up, break nudges. Shares the timers'
+    announcers, so it speaks/notifies/prints wherever timers do."""
+    from datetime import date
+    from .assistant.proactive import Proactive, ProactivePauseTool
+    from .research.reviews import due_reviews
+
+    def related_note(title: str) -> str | None:
+        hits = escanor.index.search(title, limit=1)
+        return hits[0].path if hits and hits[0].source == "brain" else None
+
+    proactive = Proactive(
+        escanor.settings["proactive"], timers.announcers, events=apple.events, reminders=apple.reminders,
+        related_note=related_note, reviews_due=lambda: len(due_reviews(escanor.vault, date.today())),
+    )
+    escanor.agent.tools.add(ProactivePauseTool(proactive))
+    escanor.services["proactive"] = proactive
+    escanor.on_start.append(proactive.start)
+    escanor.on_stop.append(proactive.stop)
 
 
 def _latest_journal(vault: Vault) -> str:

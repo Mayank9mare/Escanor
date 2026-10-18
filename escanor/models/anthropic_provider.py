@@ -28,6 +28,7 @@ Three Claude-specific details handled here:
 from __future__ import annotations
 from typing import Any, Iterator
 from .base import Model, ModelResponse, StreamEvent, ToolCall
+from .images import MISSING_TEXT, load_image
 
 
 class AnthropicModel(Model):
@@ -137,7 +138,17 @@ class AnthropicModel(Model):
                 claude_messages.append({"role": "assistant", "content": content})
 
             elif role == "tool":
-                result = {"type": "tool_result", "tool_use_id": m["tool_call_id"], "content": m["content"]}
+                content: str | list = m["content"]
+                if m.get("images"):
+                    blocks: list[dict] = [{"type": "text", "text": m["content"]}]
+                    for path in m["images"]:
+                        loaded = load_image(path)
+                        if loaded:
+                            blocks.append({"type": "image", "source": {"type": "base64", "media_type": loaded[0], "data": loaded[1]}})
+                        else:
+                            blocks.append({"type": "text", "text": MISSING_TEXT})
+                    content = blocks
+                result = {"type": "tool_result", "tool_use_id": m["tool_call_id"], "content": content}
                 if m.get("is_error"):
                     result["is_error"] = True
                 previous = claude_messages[-1] if claude_messages else None

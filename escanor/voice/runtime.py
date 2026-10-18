@@ -45,6 +45,7 @@ def serve(app: Escanor, store: SessionStore, speech: SpeechEngine | None, mute: 
             audio = AudioOut(speech.synthesize, NullPlayer() if mute else AfplayPlayer(),
                              ducker=app.services.get("ducker"))
             attach_dj_voice(app, audio)
+        await app.start()
         web = create_server(app, store, speech, audio)
         host, port = app.settings["server"]["host"], int(app.settings["server"]["port"])
         print(f"Escanor is at http://{host}:{port}  (Ctrl-C to stop)")
@@ -54,6 +55,7 @@ def serve(app: Escanor, store: SessionStore, speech: SpeechEngine | None, mute: 
         finally:
             if audio is not None:
                 await audio.close()
+            await app.stop()
 
     asyncio.run(main())
 
@@ -101,11 +103,13 @@ def listen(app: Escanor, store: SessionStore, speech: SpeechEngine, use_enter: b
             wait_enter=wait_enter, on_status=lambda s: print(f"· {s}", flush=True),
         )
         print(f"Escanor is listening ({app.agent.model_spec}). Ctrl-C to stop.")
+        await app.start()
         try:
             await loop.run()
         finally:
             frames.close()
             await audio.close()
+            await app.stop()
 
     try:
         asyncio.run(main())

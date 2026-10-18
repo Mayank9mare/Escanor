@@ -12,6 +12,7 @@ Commands:
   /skills         list the skills Escanor can load
   /tools          list tool groups and whether they're on
   /brain          re-index the second brain and show its size
+  /mcp            connected MCP servers (Gmail, Notion, GitHub, ...)
   /help           show commands
   /quit           exit (Ctrl-D works too)
 
@@ -166,6 +167,10 @@ class Repl:
             print(f"  {self.app.vault.root} · {stats['files']} notes, {stats['chunks']} chunks, "
                   f"{stats['embedded']} embedded ({self.app.index.embedder.name}) · "
                   f"{len(self.app.vault.facts())} facts · {counts['changed']} re-indexed")
+        elif command == "mcp":
+            manager = self.app.services.get("mcp")
+            for line in (manager.status_lines() if manager else ["No MCP servers configured ([mcp.servers.*])."]):
+                print(f"  {line}")
         elif command == "tools":
             enabled = self.agent.tools.enabled_groups()
             for group, names in self.agent.tools.groups().items():
@@ -215,6 +220,13 @@ class Repl:
                 pass
 
     async def loop(self, first_message: str | None = None) -> None:
+        await self.app.start()
+        try:
+            await self._session_loop(first_message)
+        finally:
+            await self.app.stop()
+
+    async def _session_loop(self, first_message: str | None) -> None:
         print(_dim(f"Escanor · {self.agent.model_spec} · conversation #{self.session.id} · /help for commands"))
         if first_message:
             print(_bold("escanor › "), end="", flush=True)

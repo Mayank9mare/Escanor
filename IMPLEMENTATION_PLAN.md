@@ -339,6 +339,11 @@ Prove the three risky external pieces before building on them.
 
 ---
 
+### Beyond the plan (2026-10-18)
+- [x] MCP connectors: any MCP server becomes a tool group (D42, D43).
+- [x] Proactive mode: meeting heads-ups, evening wrap-up, break nudges (D44).
+- [x] look_at_screen: screenshots to the model, images through every provider (D45, D46).
+
 ## 4. Order and estimates
 
 | Phase | Effort | Depends on |

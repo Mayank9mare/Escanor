@@ -1,7 +1,7 @@
 # Escanor core — Flow
 
 How the core works at runtime: where execution starts, every function on the path, every way a
-turn can end, and the low-level design underneath. Last synced: 2026-10-17, Phase 8 complete (final pass).
+turn can end, and the low-level design underneath. Last synced: 2026-10-18, MCP connectors, proactive mode, screen.
 
 ## 1. In one paragraph
 
@@ -51,6 +51,9 @@ flowchart LR
 | E13 | A timer fires | [TimerService._fire](../../escanor/assistant/timers.py) | — | notification + speech (TIMER priority) + CLI print |
 | E14 | "explain this paper <link>" | `enable_tools(research)` → `research_ingest` → `use_skill(learn-anything)` → `research_read` parts | allowed folders for files (D36) | log saved to research/learn/ |
 | E15 | `escanor usage` / `eval` / `service` / `brain backup` | [cli.main](../../escanor/cli.py) → [ops.py](../../escanor/ops.py), [costs.py](../../escanor/core/costs.py) | run by you | cost report, tool-choice eval, launchd, git backup |
+| E16 | Interface start/stop | [Escanor.start / stop](../../escanor/app.py) | — | opens MCP servers, starts proactive loop; closes them on exit |
+| E17 | Proactive loop (every 60 s) | [Proactive.tick](../../escanor/assistant/proactive.py) | quiet hours, hourly cap, pause | meeting heads-up, evening wrap, break nudge → announcers |
+| E18 | "what's on my screen?" | `look_at_screen` (asks) → [Screen.capture](../../escanor/assistant/screen.py) | Screen Recording permission | image path on the tool message → provider image blocks ([images.py](../../escanor/models/images.py)) |
 | E9 | `escanor brain reindex|stats|backup` | [cli.main](../../escanor/cli.py) | — | maintenance |
 | E6 | `/new`, `/skills`, `/tools`, `/models` | [handle_command](../../escanor/cli.py#L130) | — | `/new` also turns extra tool groups off |
 
@@ -193,6 +196,9 @@ stateDiagram-v2
 | [core/router.py](../../escanor/core/router.py) | When to hand a turn to the stronger model | models |
 | [core/costs.py](../../escanor/core/costs.py) | Prices, cost of usage rows, `DailyBudget` | telemetry |
 | [ops.py](../../escanor/ops.py) | launchd service, brain git backup, tool-choice eval | launchctl, git |
+| [connectors/mcp_client.py](../../escanor/connectors/mcp_client.py) | MCP servers → tool groups; permissions from annotations | mcp SDK |
+| [assistant/proactive.py](../../escanor/assistant/proactive.py) | Meeting heads-ups, evening wrap, break nudges | apple, brain index, ioreg |
+| [assistant/screen.py](../../escanor/assistant/screen.py), [models/images.py](../../escanor/models/images.py) | Screenshots and images in the conversation | screencapture, sips |
 | [server/](../../escanor/server/) | FastAPI app, WebSocket protocol, static UI | fastapi, uvicorn[standard] |
 | [models/](../../escanor/models/) | Provider-neutral `Model` + four providers + mock | SDKs / urllib |
 
@@ -266,5 +272,8 @@ flowchart TD
 | `[research] allowed_dirs` | Downloads, Documents, Desktop | local files research_ingest may read |
 | `[router] escalate_to / after_steps` | `sonnet` / `4` | escalation (D39); `""` = off |
 | `[budget] daily_usd / prices` | `3.0` / `{}` | spend cap (D40) |
+| `[mcp.servers.<name>]` | none | `command`/`args`/`env` or `url`; `auto_approve` globs |
+| `[proactive] …` | on; 10 min lead; 21:00 wrap; 120 min breaks; quiet 22:30–07:30; 4/hour | proactive mode |
+| `[assistant] screen` | `true` | `look_at_screen` available (asks each time) |
 | `[server] host / port` | `127.0.0.1` / `8770` | web UI address (D26) |
 | `ESCANOR_HOME` | `~/.escanor` | data directory |

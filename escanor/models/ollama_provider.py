@@ -18,6 +18,7 @@ import urllib.error
 import urllib.request
 from typing import Iterator
 from .base import Model, ModelResponse, StreamEvent, ToolCall
+from .images import FOLLOW_UP_TEXT, tool_images
 
 # Some Ollama models advertise "tools" in their capabilities but don't
 # reliably populate the native message.tool_calls field -- in testing,
@@ -271,4 +272,7 @@ class OllamaModel(Model):
 
             elif m["role"] == "tool":
                 ollama_messages.append({"role": "tool", "content": m["content"]})
+                images = tool_images([m])
+                if images:  # Ollama takes images on a user message, as raw base64
+                    ollama_messages.append({"role": "user", "content": FOLLOW_UP_TEXT, "images": [data for _, data in images]})
         return ollama_messages

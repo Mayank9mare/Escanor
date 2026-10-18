@@ -87,6 +87,16 @@ DEFAULTS: dict[str, Any] = {
     "assistant": {
         "enabled": True,      # Apple Reminders/Calendar, Mac actions, timers, briefing
         "city": "",           # for the weather in the morning briefing, e.g. "Bengaluru"
+        "screen": True,       # look_at_screen: screenshot -> model (asks first each time)
+    },
+    "proactive": {
+        "enabled": True,              # Escanor speaks up on its own (see assistant/proactive.py)
+        "meeting_lead_minutes": 10,   # 0 = no meeting heads-ups
+        "evening_wrap": "21:00",      # "" = off
+        "break_after_minutes": 120,   # 0 = no break nudges
+        "quiet_hours": "22:30-07:30",
+        "max_per_hour": 4,
+        "poll_seconds": 60,
     },
     "research": {
         "enabled": True,
@@ -102,6 +112,10 @@ DEFAULTS: dict[str, Any] = {
     "budget": {
         "daily_usd": 3.0,     # stop calling paid models after this much today (0 = no cap)
         "prices": {},         # extra $/million tokens, e.g. "gpt-5" = [1.25, 10.0]
+    },
+    "mcp": {
+        # [mcp.servers.<name>]: command/args/env (local) or url (remote); see connectors/mcp_client.py
+        "servers": {},
     },
     "server": {
         "host": "127.0.0.1",

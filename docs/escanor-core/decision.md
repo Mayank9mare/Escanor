@@ -49,6 +49,11 @@ what we're trading away. Newest at the bottom. Reversed decisions are marked **S
 | D39 | Escalate to Sonnet on "think hard" or after 4 tool steps, then hand back | Accepted | 2026-10-17 |
 | D40 | Daily spend cap from telemetry, priced conservatively | Accepted | 2026-10-17 |
 | D41 | Evals grade tool choice with stubbed tools | Accepted | 2026-10-17 |
+| D42 | MCP tools: permission from the server's read-only hint, otherwise ask | Accepted | 2026-10-18 |
+| D43 | Async start/stop hooks on the app for long-lived connections | Accepted | 2026-10-18 |
+| D44 | Proactive checks are local and rule-based, no model calls | Accepted | 2026-10-18 |
+| D45 | Screenshots ask first and stay in history as files | Accepted | 2026-10-18 |
+| D46 | Images reach non-Claude models as a follow-up user message | Accepted | 2026-10-18 |
 
 ---
 
@@ -868,3 +873,86 @@ cover the unattended DJ per day.
 expected tool is called. Every tool call gets a stub answer, so evals can't write notes, create
 reminders or play music, and grading needs no judge model. Answer quality isn't graded; that needs
 a judge or human review, deferred.
+
+---
+
+## D42. MCP tools: permission from the server's read-only hint, otherwise ask
+
+**Status:** Accepted · **Date:** 2026-10-18 · **Feature:** MCP connectors
+
+### Context
+An MCP server can expose anything: "search mail" and "send mail" look alike to Escanor. The protocol
+lets servers annotate tools (`readOnlyHint`, `destructiveHint`).
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. `readOnlyHint` → read; your `auto_approve` globs → write; everything else → external (ask)** | Safe by default; usable once you allow the harmless ones | Trusts the server's own annotation |
+| B. Everything external | Strictest | An "Allow?" for every search |
+| C. Everything write | Smooth | A prompt-injected email could make Escanor send mail |
+
+### Decision
+A ([connectors/mcp_client.py](../../escanor/connectors/mcp_client.py)). All MCP output is untrusted.
+Only configure servers you trust, since their annotations decide what runs unasked.
+
+---
+
+## D43. Async start/stop hooks on the app for long-lived connections
+
+**Status:** Accepted · **Date:** 2026-10-18
+
+MCP sessions and the proactive loop live in the event loop, and the MCP SDK requires opening and
+closing in the same task. `Escanor.on_start` / `on_stop` hooks are awaited by each interface (chat
+REPL, `serve`, `listen`) from its main task. Alternative: connect lazily on first use. Rejected:
+tool schemas must be known before the model's first request.
+
+---
+
+## D44. Proactive checks are local and rule-based, no model calls
+
+**Status:** Accepted · **Date:** 2026-10-18 · **Feature:** proactive mode
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. Fixed checks (meeting lead time, evening wrap, idle-timer breaks) with local brain search for context** | Free, predictable, works with no key; easy to reason about | Template wording |
+| B. Ask the model every few minutes "anything worth saying?" | Clever, flexible | Costs money all day; unpredictable interruptions |
+
+### Decision
+A ([assistant/proactive.py](../../escanor/assistant/proactive.py)): quiet hours, an hourly cap,
+announce-once keys and `proactive_pause`. Breaks use macOS's HID idle time, not keystroke logging.
+Tests switch it off through config so they never touch the real Calendar (B17).
+
+---
+
+## D45. Screenshots ask first and stay in history as files
+
+**Status:** Accepted · **Date:** 2026-10-18 · **Feature:** look_at_screen
+
+### Context
+A screenshot can show anything (bank pages, messages) and goes to the cloud model. Old screenshots
+in the history are re-sent on later calls (cost). Editing earlier turns to drop them would break
+Claude's preserved thinking.
+
+### Options considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. `external` (ask each time, naming the model); shrink to ~1568 px JPEG; keep the path in history; files pruned to the newest 30** | You see every capture; small DB; history never edited | Later turns in that conversation keep paying for the image (prompt caching softens it) |
+| B. Strip images from earlier turns | Cheaper | Edits history (preserved-thinking violation) |
+| C. Read-level, no prompt | Fastest by voice | Silent screen capture is too sensitive |
+
+### Decision
+A ([assistant/screen.py](../../escanor/assistant/screen.py)). `/new` starts a clean conversation if cost matters.
+
+---
+
+## D46. Images reach non-Claude models as a follow-up user message
+
+**Status:** Accepted · **Date:** 2026-10-18
+
+Claude accepts image blocks inside a tool result; OpenAI-style and Ollama tool messages are text-only.
+For those, the images follow the tool results as one user message ("Image(s) returned by the tool call
+above"). Verified live on Gemini: it answered "Red" for a generated red image.

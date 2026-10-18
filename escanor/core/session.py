@@ -141,7 +141,11 @@ class Session:
         })
 
     def append_tool_result(self, call: ToolCall, result: ToolResult) -> None:
-        self._add({"role": "tool", "tool_call_id": call.id, "content": result.output, "is_error": not result.ok})
+        message = {"role": "tool", "tool_call_id": call.id, "content": result.output, "is_error": not result.ok}
+        images = (result.data or {}).get("images") if isinstance(result.data, dict) else None
+        if images:
+            message["images"] = [str(path) for path in images]  # file paths; see models/images.py
+        self._add(message)
 
     def pending_tool_calls(self) -> list[ToolCall]:
         """Tool calls in the latest assistant message that have no result yet."""

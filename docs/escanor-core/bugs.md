@@ -23,6 +23,8 @@ Fixed bugs stay here (struck through) as an audit trail. IDs never get reused.
 | ~~B14~~ | ~~LOW~~ | ~~arXiv papers saved under their licence notice instead of their title~~ | ✅ FIXED | Phase 7 · live ingest | Phase 7 |
 | ~~B15~~ | ~~MEDIUM~~ | ~~`listen` heard its own chime as speech and ended the turn early~~ | ✅ FIXED | final review pass | Phase 8 |
 | ~~B16~~ | ~~MEDIUM~~ | ~~`escanor eval` graded API errors (e.g. rate limits) as wrong tool choices~~ | ✅ FIXED | live Gemini test | live test |
+| ~~B17~~ | ~~MEDIUM~~ | ~~Tests that start the app could poll the real Calendar (macOS prompt)~~ | ✅ FIXED | review while adding proactive mode | same step |
+| ~~B18~~ | ~~LOW~~ | ~~Evening wrap-up never fired when set after 22:00~~ | ✅ FIXED | code review | same step |
 
 Severity: **HIGH** = data loss, wrong result, security, blocks testing/release · **MEDIUM** =
 breaks an edge case or error path · **LOW** = minor or cosmetic.
@@ -160,6 +162,21 @@ breaks an edge case or error path · **LOW** = minor or cosmetic.
 - **Fix:** errored cases are reported as ERROR and left out of the score; `--delay` paces free tiers
   ([ops.py `run_eval`](../../escanor/ops.py)).
 - **Regression test:** [test_eval_marks_errors_instead_of_failing](../../tests/test_polish.py)
+
+### ~~B17. Tests that start the app could poll the real Calendar~~
+
+- **Severity:** MEDIUM · **Found:** 2026-10-18, while adding proactive mode · **Fixed:** same step
+- **Root cause:** `app.start()` launches proactive mode, whose first check runs AppleScript against
+  Calendar; the MCP integration test starts the app, so a test run could open a macOS permission prompt.
+- **Fix:** the shared test setup writes `[proactive] enabled = false` into each test's config
+  ([conftest.py](../../tests/conftest.py)).
+
+### ~~B18. Evening wrap-up never fired when set after 22:00~~
+
+- **Severity:** LOW · **Found:** 2026-10-18, review · **Fixed:** same step
+- **Root cause:** the two-hour window was compared as clock times; for 23:00 its end (01:00) is "earlier".
+- **Fix:** compare full datetimes ([proactive.py `_evening`](../../escanor/assistant/proactive.py)).
+- **Regression test:** [test_late_evening_wrap_still_fires](../../tests/test_proactive.py)
 
 ---
 
