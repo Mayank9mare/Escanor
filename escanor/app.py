@@ -100,6 +100,7 @@ def build_app(settings: dict, model: Model, model_spec: str) -> Escanor:
         lambda: UNTRUSTED_GUIDANCE,
         lambda: BRAIN_GUIDANCE,
         vault.facts_section,
+        vault.notes_section,
         lambda: skill_index_section(skills),
     ])
     agent = Agent(model, model_spec, tools=registry, prompts=prompts, gate=PermissionGate(),

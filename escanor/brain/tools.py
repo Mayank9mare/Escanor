@@ -51,10 +51,15 @@ class BrainSearchTool(Tool):
     }
     side_effect = READ
 
-    def __init__(self, index: BrainIndex):
+    def __init__(self, index: BrainIndex, vault: Vault | None = None):
         self._index = index
+        self._vault = vault
 
     def run(self, query: str, limit: int = 5) -> ToolResult:
+        if not query.strip():   # an empty search matches nothing; it once read as "the brain is empty" (B26)
+            notes = [n for n in self._vault.list() if n != "facts.md"] if self._vault else []
+            listing = "\n".join(f"- {n} — {self._vault.title(n)}" for n in notes) or "(no notes yet)"
+            return ToolResult(ok=True, output=f"Give words to search for. All notes:\n{listing}")
         hits = self._index.search(query, limit=max(1, min(int(limit or 5), 20)))
         if not hits:
             return ToolResult(ok=True, output=f"No notes match '{query}'.")
@@ -96,7 +101,9 @@ class RememberFactTool(Tool):
     name = "remember_fact"
     description = (
         "Save one durable fact about the user to facts.md (kept in mind in every conversation), e.g. "
-        "'Prefers window seats on flights'. Only facts the user stated about themselves."
+        "'Prefers window seats on flights' or 'Salary is 3 lakhs a month'. Use it whenever the user tells you "
+        "something lasting about themselves: job, family, money, health, goals, plans, preferences. Only facts "
+        "the user stated about themselves; one fact per call."
     )
     input_schema = {
         "type": "object",
@@ -222,6 +229,6 @@ class BrainListTool(Tool):
 
 def brain_tools(vault: Vault, index: BrainIndex) -> list[Tool]:
     return [
-        BrainSearchTool(index), BrainReadTool(vault), RememberFactTool(vault),
+        BrainSearchTool(index, vault), BrainReadTool(vault), RememberFactTool(vault),
         BrainWriteTool(vault), BrainAppendTool(vault), BrainListTool(vault), ForgetFactTool(vault),
     ]

@@ -34,6 +34,11 @@ How to answer:
 - For "good morning", "brief me" or "what's my day like", call morning_briefing.
 - For news, call news_headlines (a topic is optional), then tell the user the actual headlines.
   Never answer "I couldn't find specifics" without first reading a page or the headlines.
+- Your memory is the user's facts and second brain, both listed below and kept across conversations.
+  When the user tells you something lasting about themselves, save it with remember_fact (longer
+  context can also go in a note). For "what do you know about me" or anything about their life, plans,
+  work or money, use the facts and read the relevant notes first. Never say you know nothing about the
+  user, or that your memory is empty, without having checked.
 - For weather, call the weather tool. Never state live facts (weather, prices, scores, schedules,
   news) that didn't come from a tool result in this conversation; if no tool can tell you, say so."""
 

@@ -147,6 +147,29 @@ class Vault:
             path.write_text("".join(kept), encoding="utf-8")
         return removed
 
+    def title(self, relative: str) -> str:
+        """A note's first heading, else its file name."""
+        try:
+            for line in (self.root / relative).read_text(encoding="utf-8").splitlines()[:20]:
+                if line.startswith("#"):
+                    return line.lstrip("#").strip()
+        except OSError:
+            pass
+        return relative.rsplit("/", 1)[-1][:-3].replace("-", " ")
+
+    def notes_section(self, limit: int = 40) -> str:
+        """What's in the brain, for the system prompt: without it a new
+        conversation didn't know any notes existed and told the user its
+        brain was empty (B26). Most recently changed first."""
+        notes = [n for n in self.list() if n != FACTS_FILE]
+        if not notes:
+            return ""
+        notes.sort(key=lambda n: (self.root / n).stat().st_mtime, reverse=True)
+        lines = [f"- {n} — {self.title(n)}" for n in notes[:limit]]
+        more = f"\n(and {len(notes) - limit} older notes: use brain_search)" if len(notes) > limit else ""
+        return ("Notes in the user's second brain (most recent first; read one with brain_read before "
+                "answering about it):\n" + "\n".join(lines) + more)
+
     def facts_section(self, limit_chars: int = 6000) -> str:
         """The facts for the system prompt, newest kept if over the limit."""
         facts = self.facts()

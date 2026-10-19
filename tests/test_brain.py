@@ -219,3 +219,34 @@ async def test_should_need_confirmation_to_remember_after_reading_web_in_same_tu
     remembered = [e for e in events if isinstance(e, ToolFinished) and e.call.name == "remember_fact"][0]
     assert remembered.result.output == DECLINED  # default confirmer says no
     assert app.vault.facts() == []
+
+
+def test_prompt_lists_notes_newest_first_with_titles(vault):
+    """B26: a new conversation didn't know any notes existed."""
+    import time
+    vault.write("projects/career-transition", "# Career and money\n- savings: two months")
+    time.sleep(0.01)
+    vault.write("ideas/app", "no heading here")
+    section = vault.notes_section()
+    assert section.index("ideas/app.md — app") < section.index("projects/career-transition.md — Career and money")
+    assert "facts.md" not in section
+    assert Vault(vault.root.parent / "empty").notes_section() == ""
+
+
+def test_empty_search_lists_notes_instead_of_saying_nothing(vault, tmp_path):
+    vault.write("projects/career-transition", "# Career and money\n")
+    tool = BrainSearchTool(BrainIndex(tmp_path / "i.db", {"brain": vault.root}, NoEmbedder()), vault)
+    output = tool.run(query="  ").output
+    assert "projects/career-transition.md — Career and money" in output and "No notes match" not in output
+
+
+def test_system_prompt_says_check_memory_before_claiming_empty(tmp_path):
+    settings = config.load_settings()
+    settings["brain"]["embedder"] = "none"
+    settings["skills"]["dirs"] = []
+    model, spec = build_model("mock", settings)
+    app = build_app(settings, model, spec)
+    app.vault.write("projects/plan", "# Japan trip in April\n")
+    prompt = app.agent.prompts.system_prompt()
+    assert "projects/plan.md — Japan trip in April" in prompt
+    assert "Never say you know nothing about the" in prompt

@@ -250,6 +250,18 @@ breaks an edge case or error path · **LOW** = minor or cosmetic.
 - **Regression test:** `test_provider_failing_before_its_first_chunk_reports_instead_of_hanging` in
   [test_failover.py](../../tests/test_failover.py)
 
+### ~~B26. "What do you know about me?" → "my brain is empty", with notes on disk~~
+
+- **Severity:** HIGH · **Found:** 2026-10-20, reported by the user · **Fixed:** same day
+- **Root cause:** personal details were saved to a note (`projects/career-transition.md`), not facts.md, and only
+  facts reach every prompt, so a new conversation didn't know the note existed. Asked again, the model ran
+  `brain_search` with an empty query, which matches nothing, and concluded the brain was empty.
+- **Fix:** the system prompt lists the brain's notes with titles ([Vault.notes_section](../../escanor/brain/vault.py));
+  an empty search lists all notes; a rule says never claim memory is empty without checking, and lasting facts about
+  the user go to `remember_fact`. Verified live on Groq: a new conversation now recalls the career note.
+- **Regression tests:** `test_prompt_lists_notes_newest_first_with_titles`, `test_empty_search_lists_notes_instead_of_saying_nothing`,
+  `test_system_prompt_says_check_memory_before_claiming_empty` in [test_brain.py](../../tests/test_brain.py)
+
 ---
 
 ## ⏸️ Deferred / 🚫 Won't fix
