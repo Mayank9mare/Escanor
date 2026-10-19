@@ -1115,7 +1115,7 @@ heaviest at noon, lightest at night.
 
 **Status:** Accepted · **Date:** 2026-10-20
 
-Groq (`openai/gpt-oss-120b`, `qwen/qwen3-32b`) and OpenRouter (`openrouter/free`) reuse `OpenAIModel` with their own
+Groq (`openai/gpt-oss-120b`, `qwen/qwen3.8-27b`) and OpenRouter (`openrouter/free`) reuse `OpenAIModel` with their own
 base URLs ([config.COMPATIBLE](../../escanor/config.py), [registry.py](../../escanor/models/registry.py)). Cerebras was
 skipped: its permanent free tier reportedly ended in July 2026.
 

@@ -60,7 +60,7 @@ DEFAULTS: dict[str, Any] = {
             # Free tiers (keys free, no card): Groq is fast and smart; OpenRouter's
             # "free" router picks any free model that can use tools (50 requests/day).
             "groq": "groq:openai/gpt-oss-120b",
-            "qwen": "groq:qwen/qwen3-32b",
+            "qwen": "groq:qwen/qwen3.8-27b",
             "free": "openrouter:openrouter/free",
             "local": "ollama:qwen3:8b",
             "mock": "mock:mock-model",

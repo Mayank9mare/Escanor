@@ -88,7 +88,7 @@ Only a Gemini key? Put `[models]` / `default = "gemini"` in `~/.escanor/config.t
 | Alias | Model | Free key |
 |---|---|---|
 | `groq` | gpt-oss-120b on Groq: smart, very fast, good with tools | [console.groq.com/keys](https://console.groq.com/keys) → `GROQ_API_KEY` |
-| `qwen` | Qwen3 32B on Groq | same key |
+| `qwen` | Qwen3.8 27B on Groq | same key |
 | `free` | OpenRouter's free router: any free model that can use tools (50 requests/day) | [openrouter.ai/keys](https://openrouter.ai/keys) → `OPENROUTER_API_KEY` |
 
 When a model runs into its rate limit or daily quota, Escanor carries on with the next model in
