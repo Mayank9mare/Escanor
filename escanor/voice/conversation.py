@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from typing import Awaitable, Callable
 from ..core.agent import Agent, Confirmer
-from ..core.events import Error, Event, TextDelta, TurnDone
+from ..core.events import Error, Event, TextDelta, ToolStarted, TurnDone
 from ..core.session import Session
 from ..models.base import ToolCall
 from ..core.persona import line
@@ -21,6 +21,10 @@ from .audio_out import CONFIRM, REPLY, AudioOut
 from .chunker import SentenceChunker
 
 EventSink = Callable[[Event], Awaitable[None] | None]
+
+# Tools that go out to the web or read documents: seconds of silence, so
+# Escanor says it's working (once a turn) instead of going quiet.
+SLOW_TOOLS = {"web_search", "web_fetch", "news_headlines", "research_ingest", "research_read", "look_at_screen"}
 
 _YES = re.compile(r"\b(yes|yeah|yep|yup|sure|ok|okay|go ahead|do it|confirm|please do|affirmative)\b", re.I)
 _NO = re.compile(r"\b(no|nope|don't|do not|cancel|stop|never mind|nevermind|negative)\b", re.I)
@@ -39,6 +43,7 @@ async def speak_turn(agent: Agent, session: Session, text: str, audio: AudioOut 
     audio.interrupt()."""
     chunker = SentenceChunker()
     events: list[Event] = []
+    said_working = False
     async for event in agent.run_turn(session, text, confirmer, spoken=audio is not None):
         events.append(event)
         if sink is not None:
@@ -50,6 +55,11 @@ async def speak_turn(agent: Agent, session: Session, text: str, audio: AudioOut 
         if isinstance(event, TextDelta):
             for sentence in chunker.feed(event.text):
                 audio.say(sentence, REPLY)
+        elif isinstance(event, ToolStarted) and event.call.name in SLOW_TOOLS and not said_working:
+            said_working = True
+            for sentence in chunker.flush():   # anything said before the tool first
+                audio.say(sentence, REPLY)
+            audio.say(line("working"), REPLY)
         elif isinstance(event, (TurnDone, Error)):
             for sentence in chunker.flush():
                 audio.say(sentence, REPLY)

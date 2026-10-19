@@ -78,6 +78,13 @@ LINES = {
         "afternoon": "Something went wrong. The details are on screen.",
         "night": "Oh, I'm so sorry, something went wrong. The details are on screen.",
     },
+    "working": {
+        "dawn": "Let me look into that.",
+        "day": "A moment. I'll find out.",
+        "noon": "Watch, and it shall be found.",
+        "afternoon": "Give me a moment; I'll look.",
+        "night": "Oh, just a moment, let me check...",
+    },
     "not_heard": {
         "dawn": "I didn't catch that. Once more?",
         "day": "Speak again; I didn't catch that.",
@@ -125,7 +132,7 @@ def persona_section(style: str, now: datetime | None = None) -> str:
 
 
 def line(kind: str, style: str | None = None, now: datetime | None = None, **values: str) -> str:
-    """A fixed spoken line ('confirm', 'error', 'not_heard') in character.
+    """A fixed spoken line ('confirm', 'error', 'working', 'not_heard') in character.
     With style "plain", the neutral wording."""
     style = style or _style
     key = phase(now or datetime.now()) if style == "escanor" else "dawn"

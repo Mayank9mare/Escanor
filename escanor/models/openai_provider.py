@@ -23,14 +23,17 @@ from .images import FOLLOW_UP_TEXT, tool_images
 class OpenAIModel(Model):
     def __init__(
         self, model_name: str, api_key: str, base_url: str | None = None,
-        extra_headers: dict[str, str] | None = None,
+        extra_headers: dict[str, str] | None = None, timeout: float | None = None,
     ):
         try:
             import openai
         except ImportError as e:
             raise RuntimeError("Run `pip install openai` to use --provider openai.") from e
         self._openai = openai
-        self._client = openai.OpenAI(api_key=api_key, base_url=base_url, default_headers=extra_headers)
+        # timeout: longest wait for the response to start and between streamed
+        # chunks. A stuck free-tier queue then fails over instead of hanging.
+        kwargs = {"timeout": openai.Timeout(timeout, connect=10.0), "max_retries": 0} if timeout else {}
+        self._client = openai.OpenAI(api_key=api_key, base_url=base_url, default_headers=extra_headers, **kwargs)
         self.name = model_name
         # Token usage in streams needs stream_options, which only OpenAI's own
         # endpoint is known to accept; compatible endpoints may reject it (B5).

@@ -184,3 +184,71 @@ async def test_provider_failing_before_its_first_chunk_reports_instead_of_hangin
         return [x async for x in astream(boom)]
     with pytest.raises(RuntimeError, match="connection refused"):
         await asyncio.wait_for(drain(), 2)
+
+
+def test_timeout_fails_over_with_a_short_rest():
+    clock = Clock()
+    failover = Failover(builder({}), [], cooldown_seconds=900, clock=clock)
+    assert is_limit_error("OpenAI-compatible streaming request failed: Request timed out.")
+    failover.mark("groq:x", "Request timed out.")
+    clock.now = 121
+    assert not failover.resting("groq:x")
+
+
+def test_compatible_providers_give_up_after_15_seconds(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "gsk_test")
+    client = get_model("groq", "openai/gpt-oss-120b")._inner._client
+    assert client.timeout.read == 15.0 and client.max_retries == 0
+
+
+@pytest.mark.parametrize("message,rest", [
+    ("429 on tokens per minute (TPM): Limit 8000, Used 5808. Please try again in 7.3s.", 9.3),
+    ("429 tokens per minute: try again in 1m2.5s", 64.5),
+    ("429 rate limit: try again in 450ms", 2.45),
+    ("429 requests per minute (RPM) exceeded", 60.0),
+])
+def test_per_minute_limits_rest_as_long_as_the_provider_says(message, rest):
+    clock = Clock()
+    failover = Failover(builder({}), [], cooldown_seconds=900, clock=clock)
+    failover.mark("groq:x", message)
+    clock.now = rest - 0.01
+    assert failover.resting("groq:x")
+    clock.now = rest + 0.01
+    assert not failover.resting("groq:x")
+
+
+async def test_request_after_mid_turn_switch_never_ends_on_the_models_turn(store):
+    """B27: the folded tool history ended on an assistant message; Gemini refused it."""
+    from escanor.core.prompts import CONTINUE
+    first = MockModel(script=[ModelResponse(tool_calls=[ToolCall("c1", "get_time", {})])])
+    calls = {"n": 0}
+
+    class ThenLimited(Model):
+        def chat(self, messages, tools=None):
+            raise AssertionError
+
+        def chat_stream(self, messages):
+            raise AssertionError
+
+        def chat_stream_tools(self, messages, tools=None):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return first.chat_stream_tools(messages, tools)
+            raise RuntimeError("429 rate limit")
+
+    sent = []
+
+    class Strict(MockModel):
+        def chat_stream_tools(self, messages, tools=None):
+            sent.append(messages)
+            if messages[-1]["role"] == "assistant":
+                raise RuntimeError("400 Requests ending with a model turn are not supported.")
+            return super().chat_stream_tools(messages, tools)
+
+    agent = Agent(ThenLimited(), "a:first", tools=ToolRegistry([Clock2()]))
+    agent.failover = Failover(builder({"b:strict": Strict(script=[ModelResponse(text="Half nine.")])}), ["b:strict"])
+    session = store.create()
+    events = await collect(agent, session, "time?")
+    assert isinstance(events[-1], TurnDone)
+    assert sent[0][-1] == {"role": "user", "content": CONTINUE}
+    assert all(m.get("content") != CONTINUE for m in session.messages)    # never saved

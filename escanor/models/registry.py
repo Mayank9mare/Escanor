@@ -51,7 +51,9 @@ def _construct(provider: str, model_name: str, effort: str | None) -> Model:
             raise RuntimeError(f"Set {env_var} (in ~/.escanor/.env) to use {provider} models; "
                                f"get a free key at {config.COMPATIBLE[provider][1]}.")
         base_url = config.get_gemini_base_url() if provider == "gemini" else config.COMPATIBLE[provider][0]
-        return OpenAIModel(model_name=model_name, api_key=api_key, base_url=base_url)
+        # Free tiers sometimes queue a request for half a minute: give up after
+        # 15 s of silence and let failover try the next model (core/failover.py).
+        return OpenAIModel(model_name=model_name, api_key=api_key, base_url=base_url, timeout=15.0)
 
     if provider == "ollama":
         from .ollama_provider import OllamaModel

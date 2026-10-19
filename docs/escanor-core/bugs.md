@@ -262,6 +262,28 @@ breaks an edge case or error path · **LOW** = minor or cosmetic.
 - **Regression tests:** `test_prompt_lists_notes_newest_first_with_titles`, `test_empty_search_lists_notes_instead_of_saying_nothing`,
   `test_system_prompt_says_check_memory_before_claiming_empty` in [test_brain.py](../../tests/test_brain.py)
 
+### ~~B27. Mid-turn failover to Gemini was refused: "Requests ending with a model turn are not supported"~~
+
+- **Severity:** HIGH · **Found:** 2026-10-20, live test after the user saw a 40 s silence · **Fixed:** same day
+- **Root cause:** switching provider mid-turn folds the turn's tool calls into assistant text, so the request ended on
+  an assistant message. Gemini (and Claude) reject that; the failover test only checked that the switch happened.
+- **Fix:** [PromptBuilder.build](../../escanor/core/prompts.py) adds a "carry on" user nudge when the history ends on
+  the model's turn (sent only, never saved). Verified live: Groq (TPM) → Gemini (accepted; 503 busy) → OpenRouter answered.
+- **Regression test:** `test_request_after_mid_turn_switch_never_ends_on_the_models_turn` in [test_failover.py](../../tests/test_failover.py)
+
+### ~~B28. 40 seconds of silence on a web-search turn (Groq's 8,000 tokens/minute free limit)~~
+
+- **Severity:** MEDIUM · **Found:** 2026-10-20, reported by the user ("it stopped responding") · **Fixed:** same day
+- **Root cause:** Groq's free tier allows 8,000 tokens a minute for gpt-oss-120b; an Escanor request is ~3,000, so a
+  multi-step turn hits it and Groq queued one request for 28 s. Meanwhile voice said nothing.
+- **Fix:** OpenAI-compatible providers time out after 15 s without data and fail over (2 min rest); a per-minute limit
+  rests the model only as long as the provider says ("try again in 7.3s") ([failover.py](../../escanor/core/failover.py));
+  voice says a short in-character "let me look into that" once per turn when a slow tool runs
+  ([conversation.py](../../escanor/voice/conversation.py)).
+- **Regression tests:** `test_per_minute_limits_rest_as_long_as_the_provider_says`, `test_timeout_fails_over_with_a_short_rest`,
+  `test_compatible_providers_give_up_after_15_seconds` ([test_failover.py](../../tests/test_failover.py));
+  `test_says_it_is_working_once_when_a_slow_tool_runs` ([test_voice.py](../../tests/test_voice.py))
+
 ---
 
 ## ⏸️ Deferred / 🚫 Won't fix

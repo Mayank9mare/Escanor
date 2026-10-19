@@ -49,6 +49,8 @@ to show details on screen. Say numbers and times the way a person would."""
 
 Section = Callable[[], str]
 
+CONTINUE = "(Carry on from the results above and answer my last request.)"
+
 
 class PromptBuilder:
     def __init__(self, persona: str = PERSONA, sections: list[Section] | None = None,
@@ -68,4 +70,11 @@ class PromptBuilder:
         return "\n\n".join(parts)
 
     def build(self, session: Session, spoken: bool = False) -> list[dict]:
-        return [{"role": "system", "content": self.system_prompt(spoken)}, *session.messages]
+        messages = [{"role": "system", "content": self.system_prompt(spoken)}, *session.messages]
+        if session.messages and session.messages[-1]["role"] == "assistant":
+            # After a mid-turn switch to another provider, the tool calls so far are
+            # folded into assistant text, so the request would end on the model's own
+            # turn -- which Gemini (and Claude) refuse (B27). Ask it to carry on; this
+            # nudge goes only to the model, never into the saved conversation.
+            messages.append({"role": "user", "content": CONTINUE})
+        return messages

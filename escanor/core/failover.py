@@ -8,6 +8,10 @@ OpenRouter's 50 requests a day. When a model answers "rate limited" or
 
     gemini hits its quota -> "switched to groq" -> the same step is retried
 
+A per-minute limit rests the model only as long as the provider asks
+("try again in 7.3s"), else a minute. A request that sends nothing for 15 s (a stuck free-tier queue) fails over
+the same way and rests the model for two minutes.
+
 The exhausted model rests for a cooldown (longer for a daily quota), and
 the next turn after it has rested switches back to the model you chose.
 
@@ -23,7 +27,10 @@ from typing import Callable
 from ..models.base import Model
 
 _LIMIT = re.compile(r"\b429\b|rate.?limit|quota|resource.?exhausted|too many requests|\b503\b|overloaded|"
-                    r"unavailable|capacity", re.I)
+                    r"unavailable|capacity|timed? ?out", re.I)
+_TIMEOUT = re.compile(r"timed? ?out", re.I)
+_RETRY_IN = re.compile(r"try again in (?:(\d+)m)?([\d.]+)(ms|s)\b", re.I)
+_PER_MINUTE = re.compile(r"per minute|\bTPM\b|\bRPM\b", re.I)
 _DAILY = re.compile(r"per.?day|daily|PerDay|tokens per day|requests per day|\bRPD\b|\bTPD\b", re.I)
 
 
@@ -44,7 +51,18 @@ class Failover:
         self.preferred: str | None = None      # the model the user chose, while we're on a fallback
 
     def mark(self, spec: str, message: str) -> None:
-        rest = self.daily_cooldown if _DAILY.search(message) else self.cooldown
+        retry = _RETRY_IN.search(message)
+        if retry:                        # the provider says when: Groq's "try again in 7.3s"
+            minutes, amount, unit = retry.groups()
+            rest = int(minutes or 0) * 60 + float(amount) / (1000 if unit.lower() == "ms" else 1) + 2
+        elif _DAILY.search(message):
+            rest = self.daily_cooldown
+        elif _PER_MINUTE.search(message):
+            rest = 60.0
+        elif _TIMEOUT.search(message):   # one stuck request: a short rest, not the full cooldown
+            rest = min(self.cooldown, 120.0)
+        else:
+            rest = self.cooldown
         self._resting[spec] = self.clock() + rest
 
     def resting(self, spec: str) -> bool:

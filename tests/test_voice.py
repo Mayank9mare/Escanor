@@ -392,3 +392,26 @@ async def test_transcript_wake_answers_question_said_in_the_same_breath():
     assert await loop.once() == "what time is it"
     assert answered == ["what time is it"]
     await audio.close()
+
+
+async def test_says_it_is_working_once_when_a_slow_tool_runs(tmp_path):
+    from escanor.core.agent import Agent
+    from escanor.core.session import SessionStore
+    from escanor.models.base import ModelResponse, ToolCall
+    from escanor.models.mock_provider import MockModel
+    from escanor.voice.conversation import speak_turn
+
+    class Ear:
+        def __init__(self):
+            self.said = []
+
+        def say(self, text, priority=None):
+            self.said.append(text)
+
+    script = [ModelResponse(tool_calls=[ToolCall("1", "web_search", {"query": "a"})]),
+              ModelResponse(tool_calls=[ToolCall("2", "web_search", {"query": "b"})]),
+              ModelResponse(text="Found it.")]
+    ear = Ear()
+    await speak_turn(Agent(MockModel(script=script), "mock:m"), SessionStore(tmp_path / "s.db").create(), "look", ear)
+    from escanor.core.persona import LINES
+    assert sum(s in LINES["working"].values() for s in ear.said) == 1 and ear.said[-1] == "Found it."
