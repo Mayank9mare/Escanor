@@ -25,6 +25,7 @@ from ..tools.base import ToolResult
 from ..tools.registry import ToolRegistry
 from .events import Error, Event, ModelSwitched, TextDelta, ToolFinished, ToolStarted, TurnDone
 from .costs import DailyBudget
+from .failover import Failover, is_limit_error
 from .prompts import PromptBuilder
 from .router import Router, same_provider
 from .session import Session
@@ -75,8 +76,11 @@ async def astream(make_iterator: Callable[[], Iterator[T]]) -> AsyncIterator[T]:
             pass  # the event loop is gone; nobody is listening any more
 
     def worker() -> None:
-        iterator = make_iterator()
+        iterator = None
         try:
+            # Built inside the try: a provider that fails before its first
+            # chunk must surface as an error, not leave the turn waiting forever (B25).
+            iterator = make_iterator()
             for item in iterator:
                 if stop.is_set():
                     break
@@ -115,12 +119,29 @@ class Agent:
         self._pending_switch: tuple[Model, str] | None = None
         self.router: Router | None = None        # escalation to a stronger model (core/router.py)
         self.budget: DailyBudget | None = None   # daily spend cap (core/costs.py)
+        self.failover: Failover | None = None    # next model when one is rate-limited (core/failover.py)
+        self._failed_over = False
 
     def set_model(self, model: Model, model_spec: str) -> None:
-        """Switch models between turns. The session's history is fixed up
-        for the new model at the start of the next turn."""
+        """Switch models between turns (the user's choice: it also ends any
+        failover). The session's history is fixed up for the new model at
+        the start of the next turn."""
+        self._use(model, model_spec)
+        if self.failover is not None:
+            self.failover.preferred = None
+
+    def _use(self, model: Model, model_spec: str) -> None:
+        """Switch for the agent's own reasons (escalation, failover)."""
         self.model = model
         self.model_spec = model_spec
+
+    def _fail_over(self, session: Session, target: tuple[Model, str]) -> ModelSwitched:
+        if self.failover.preferred is None:
+            self.failover.preferred = self.model_spec   # to come back to once it has rested
+        self._use(*target)
+        self._failed_over = True
+        session.collapse_tool_history(target[1])         # another provider can't read this one's tool calls
+        return ModelSwitched(target[1])
 
     def request_model_switch(self, model: Model, model_spec: str) -> None:
         """Switch once the current turn ends (used by the switch_model tool),
@@ -144,13 +165,14 @@ class Agent:
         An escalated turn (router) runs on the stronger model and hands back
         to the normal one afterwards."""
         home = (self.model, self.model_spec)
+        self._failed_over = False
         try:
             async for event in self._steps(session, user_text, confirmer or DenyConfirmer(), spoken):
                 yield event
         finally:
-            escalated = self.model_spec != home[1]
+            escalated = self.model_spec != home[1] and not self._failed_over
             if escalated:
-                self.set_model(*home)
+                self._use(*home)
             switched_to = self._apply_pending_switch()
         if escalated and not switched_to:
             yield ModelSwitched(home[1])
@@ -161,10 +183,17 @@ class Agent:
         target = self.router.escalation() if self.router else None
         if target is None or target[1] == self.model_spec:
             return None
-        self.set_model(*target)
+        self._use(*target)
         return target[1]
 
     async def _steps(self, session: Session, user_text: str, confirmer: Confirmer, spoken: bool) -> AsyncIterator[Event]:
+        if self.failover is not None:
+            target = self.failover.back_home(self.model_spec)
+            if target is not None:
+                self._use(*target)
+                yield ModelSwitched(target[1])
+            elif self.failover.resting(self.model_spec) and (target := self.failover.next(self.model_spec)):
+                yield self._fail_over(session, target)
         if self.router and self.router.wants_escalation(user_text) and (spec := self._escalate()):
             yield ModelSwitched(spec)
         session.repair()
@@ -176,24 +205,38 @@ class Agent:
             if (self.router and self.router.after_steps and step == self.router.after_steps):
                 target = self.router.escalation()
                 if target and target[1] != self.model_spec and same_provider(target[1], self.model_spec):
-                    self.set_model(*target)
+                    self._use(*target)
                     yield ModelSwitched(target[1])
             if self.budget is not None and (stop := self.budget.check()):
                 yield Error(stop)
                 return
-            messages = self.prompts.build(session, spoken)
-            schemas = self.tool_schemas() or None
-            model = self.model
-            response: ModelResponse | None = None
-            try:
-                async for event in astream(lambda: model.chat_stream_tools(messages, schemas)):
-                    if event.kind == "text" and event.text:
-                        yield TextDelta(event.text)
-                    elif event.kind == "done":
-                        response = event.response
-            except RuntimeError as e:
-                yield Error(str(e))
-                return
+            attempts = 0
+            while True:
+                messages = self.prompts.build(session, spoken)
+                schemas = self.tool_schemas() or None
+                model = self.model
+                response: ModelResponse | None = None
+                streamed = False
+                try:
+                    async for event in astream(lambda: model.chat_stream_tools(messages, schemas)):
+                        if event.kind == "text" and event.text:
+                            streamed = True
+                            yield TextDelta(event.text)
+                        elif event.kind == "done":
+                            response = event.response
+                except RuntimeError as e:
+                    # Rate limit / quota before any reply text: same step, next model.
+                    if (self.failover is not None and not streamed and is_limit_error(str(e))
+                            and attempts < len(self.failover.chain)):
+                        attempts += 1
+                        self.failover.mark(self.model_spec, str(e))
+                        target = self.failover.next(self.model_spec)
+                        if target is not None:
+                            yield self._fail_over(session, target)
+                            continue
+                    yield Error(str(e))
+                    return
+                break
             if response is None:
                 yield Error("The model ended its reply without finishing it.")
                 return

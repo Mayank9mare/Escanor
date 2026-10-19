@@ -27,11 +27,20 @@ _ENV_VAR_BY_PROVIDER = {
     "anthropic": "ANTHROPIC_API_KEY",
     "openai": "OPENAI_API_KEY",
     "gemini": "GEMINI_API_KEY",
+    "groq": "GROQ_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
     "elevenlabs": "ELEVENLABS_API_KEY",
     "sarvam": "SARVAM_API_KEY",
 }
 
-PROVIDERS = ("anthropic", "openai", "gemini", "ollama", "mock")
+PROVIDERS = ("anthropic", "openai", "gemini", "groq", "openrouter", "ollama", "mock")
+
+# OpenAI-compatible endpoints: provider -> (base URL, where to get a key).
+COMPATIBLE = {
+    "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai/", "https://aistudio.google.com/apikey"),
+    "groq": ("https://api.groq.com/openai/v1", "https://console.groq.com/keys"),
+    "openrouter": ("https://openrouter.ai/api/v1", "https://openrouter.ai/keys"),
+}
 
 DEFAULTS: dict[str, Any] = {
     "models": {
@@ -39,11 +48,20 @@ DEFAULTS: dict[str, Any] = {
         # Claude effort: low | medium | high | xhigh | max. "low" keeps a
         # voice assistant snappy; raise it (or switch to sonnet) for hard work.
         "effort": "low",
+        # When a model hits its rate limit or daily quota, carry on with the next one
+        # here that has a key (core/failover.py). [] = no failover.
+        "fallbacks": ["groq", "gemini", "free"],
+        "fallback_cooldown_minutes": 15,
         "aliases": {
             "haiku": "anthropic:claude-haiku-5-5",
             "sonnet": "anthropic:claude-sonnet-5-5",
             "gpt": "openai:gpt-5",
             "gemini": "gemini:gemini-3.5-flash-lite",
+            # Free tiers (keys free, no card): Groq is fast and smart; OpenRouter's
+            # "free" router picks any free model that can use tools (50 requests/day).
+            "groq": "groq:openai/gpt-oss-120b",
+            "qwen": "groq:qwen/qwen3-32b",
+            "free": "openrouter:openrouter/free",
             "local": "ollama:qwen3:8b",
             "mock": "mock:mock-model",
         },

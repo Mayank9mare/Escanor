@@ -107,6 +107,10 @@ def build_app(settings: dict, model: Model, model_spec: str) -> Escanor:
     if settings["router"].get("escalate_to"):
         agent.router = Router(lambda name: build_model(name, settings), settings["router"]["escalate_to"],
                               int(settings["router"].get("after_steps", 0)))
+    if settings["models"].get("fallbacks"):
+        from .core.failover import Failover
+        agent.failover = Failover(lambda name: build_model(name, settings), settings["models"]["fallbacks"],
+                                  cooldown_seconds=60 * float(settings["models"].get("fallback_cooldown_minutes", 15)))
     if float(settings["budget"].get("daily_usd", 0)) > 0:
         from . import telemetry
         agent.budget = DailyBudget(float(settings["budget"]["daily_usd"]),

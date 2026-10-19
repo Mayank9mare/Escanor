@@ -40,15 +40,18 @@ def _construct(provider: str, model_name: str, effort: str | None) -> Model:
             raise RuntimeError("Set OPENAI_API_KEY (in your shell or .env) to use OpenAI models.")
         return OpenAIModel(model_name=model_name, api_key=api_key)
 
-    if provider == "gemini":
-        # Gemini speaks the OpenAI-compatible chat completions shape, so it
-        # reuses OpenAIModel with Google's base_url. Verified live in
-        # kmare-code: chat, streaming and tool calling.
+    if provider in config.COMPATIBLE:
+        # Gemini, Groq and OpenRouter speak the OpenAI-compatible chat
+        # completions shape, so they reuse OpenAIModel with their own base_url.
+        # Gemini verified live in kmare-code: chat, streaming and tool calling.
         from .openai_provider import OpenAIModel
-        api_key = config.get_api_key("gemini")
+        api_key = config.get_api_key(provider)
         if not api_key:
-            raise RuntimeError("Set GEMINI_API_KEY (in your shell or .env) to use Gemini models.")
-        return OpenAIModel(model_name=model_name, api_key=api_key, base_url=config.get_gemini_base_url())
+            env_var = config._ENV_VAR_BY_PROVIDER[provider]
+            raise RuntimeError(f"Set {env_var} (in ~/.escanor/.env) to use {provider} models; "
+                               f"get a free key at {config.COMPATIBLE[provider][1]}.")
+        base_url = config.get_gemini_base_url() if provider == "gemini" else config.COMPATIBLE[provider][0]
+        return OpenAIModel(model_name=model_name, api_key=api_key, base_url=base_url)
 
     if provider == "ollama":
         from .ollama_provider import OllamaModel

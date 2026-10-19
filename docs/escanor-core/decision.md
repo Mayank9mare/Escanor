@@ -1109,3 +1109,21 @@ so it sounds larger), a low-end boost, soft saturation and a short dark hall, ~4
 speaks faster by the pitch factor to keep the pace. `effect = "sun"` (default) follows the persona's phases:
 heaviest at noon, lightest at night.
 
+---
+
+## D58. Free providers (Groq, OpenRouter) and failover on rate limits
+
+**Status:** Accepted · **Date:** 2026-10-20
+
+Groq (`openai/gpt-oss-120b`, `qwen/qwen3-32b`) and OpenRouter (`openrouter/free`) reuse `OpenAIModel` with their own
+base URLs ([config.COMPATIBLE](../../escanor/config.py), [registry.py](../../escanor/models/registry.py)). Cerebras was
+skipped: its permanent free tier reportedly ended in July 2026.
+
+[failover.py](../../escanor/core/failover.py): a limit-type error (429, quota, overloaded) **before any reply text
+streamed** marks the model resting (15 min; 3 h for a daily quota) and retries the same step on the next keyed model in
+`[models] fallbacks`, collapsing tool history for the new provider. Other errors still end the turn (they'd fail
+everywhere). The agent stays on the fallback and switches back to the user's model at the start of the first turn after
+it has rested. `set_model` (the user's choice) clears the failover; escalation and failover use `_use`.
+
+**Trade-off:** a different model may answer mid-conversation; the switch is announced as ModelSwitched.
+

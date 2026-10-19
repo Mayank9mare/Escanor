@@ -241,6 +241,15 @@ breaks an edge case or error path · **LOW** = minor or cosmetic.
 - **Fix:** tainted turns ask for every external tool; a fenced selection in the user's message taints the turn (D55).
 - **Regression tests:** `test_fenced_user_message_makes_allowed_shortcut_ask` in [test_desk.py](../../tests/test_desk.py)
 
+### ~~B25. A provider failing before its first chunk hung the turn forever~~
+
+- **Severity:** HIGH · **Found:** 2026-10-20, failover tests hung · **Fixed:** same day
+- **Root cause:** `astream()` built the provider's iterator outside its try block, so an exception raised when the
+  stream was created (not while iterating) died in the worker thread and the turn waited forever.
+- **Fix:** build the iterator inside the try ([agent.astream](../../escanor/core/agent.py)).
+- **Regression test:** `test_provider_failing_before_its_first_chunk_reports_instead_of_hanging` in
+  [test_failover.py](../../tests/test_failover.py)
+
 ---
 
 ## ⏸️ Deferred / 🚫 Won't fix

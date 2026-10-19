@@ -83,6 +83,18 @@ Keys go in `~/.escanor/.env` so they're found wherever you run Escanor (a `.env`
 No key yet? `escanor --model mock` runs everything with a fake model.
 Only a Gemini key? Put `[models]` / `default = "gemini"` in `~/.escanor/config.toml` (free tier: `gemini-3.5-flash-lite`).
 
+**Free models.** Besides Gemini, two free keys (no card) unlock more:
+
+| Alias | Model | Free key |
+|---|---|---|
+| `groq` | gpt-oss-120b on Groq: smart, very fast, good with tools | [console.groq.com/keys](https://console.groq.com/keys) → `GROQ_API_KEY` |
+| `qwen` | Qwen3 32B on Groq | same key |
+| `free` | OpenRouter's free router: any free model that can use tools (50 requests/day) | [openrouter.ai/keys](https://openrouter.ai/keys) → `OPENROUTER_API_KEY` |
+
+When a model runs into its rate limit or daily quota, Escanor carries on with the next model in
+`[models] fallbacks` (default `groq → gemini → free`, skipping any without a key) and switches back once yours has
+rested. Free tiers change often; check each provider's limits page.
+
 ## Voice
 
 ```bash
@@ -195,7 +207,7 @@ learning log tells the morning briefing when a topic is due for review. Skills a
 
 | Command | What it does |
 |---|---|
-| `/model [name]` | show or switch the model: `haiku`, `sonnet`, `gpt`, `gemini`, `local`, `mock`, or `provider:model-id` |
+| `/model [name]` | show or switch the model: `haiku`, `sonnet`, `gpt`, `gemini`, `groq`, `qwen`, `free`, `local`, `mock`, or `provider:model-id` |
 | `/models`, `/skills`, `/tools` | list model aliases, loadable skills, tool groups |
 | `/brain` | re-index notes and show their size |
 | `/new`, `/quit` | new conversation, exit |
