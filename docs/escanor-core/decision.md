@@ -1127,3 +1127,33 @@ it has rested. `set_model` (the user's choice) clears the failover; escalation a
 
 **Trade-off:** a different model may answer mid-conversation; the switch is announced as ModelSwitched.
 
+---
+
+## D59. State-of-the-art second brain: deferred upgrades
+
+**Status:** Deferred · **Date:** 2026-10-20 · Decided by the user: "keep it simple for now"
+
+After B26, the user asked for a state-of-the-art second brain, then chose to keep the current design (Markdown notes +
+facts.md, keyword search, notes listed in every prompt). These upgrades were proposed, drawn from Mem0, Zep/Graphiti,
+Letta and 2026 memory papers, and are parked here in suggested order (1, 2, 4, 5 matter most):
+
+| # | Upgrade | What it changes |
+|---|---|---|
+| 1 | **Automatic memory** | After each exchange a cheap background pass (Groq) extracts lasting facts and adds / updates / retires them against what's known: memory no longer depends on the model choosing to call `remember_fact` |
+| 2 | **Facts that age properly** | Each fact has valid-from and replaced-by (bi-temporal, as in Zep/Graphiti): a correction ("33 lakhs → 3 lakhs a month") supersedes the old fact instead of piling up beside it; "what changed?" can be answered |
+| 3 | **People and project links** | Entity pages (people, projects, places, organisations) with `[[wiki links]]`; retrieval follows links ("my parents" pulls in everything linked to them) |
+| 4 | **Semantic search without Ollama** | A small local ONNX embedder (~130 MB, onnxruntime is already installed for Piper) beside keyword search, ranked by relevance, recency and links. Today search is keyword-only: Ollama isn't installed |
+| 5 | **Recall before every reply** | The most relevant memories are added to context automatically each turn, not only when the model searches |
+| 6 | **Memory of conversations** | Each conversation gets a short summary in the journal; "what did we discuss last week about Japan?" works |
+| 7 | **Nightly tidy-up** | Merge duplicates, retire stale facts, refresh a short profile of the user that's always loaded (the rest retrieved) |
+| 8 | **Sources** | Every memory records where it came from (user said / inferred / read); outside text never becomes a fact |
+| 9 | **Brain page in the HUD** | Profile, facts over time, linked pages; edit and forget buttons |
+| 10 | **Memory eval** | A LongMemEval-style section in `escanor eval`: knowledge updates, temporal questions, multi-session recall |
+
+**Smallest worthwhile first step when resumed:** #4 (semantic search), then #1 + #2.
+
+**References:** [Mem0, State of AI Agent Memory 2026](https://mem0.ai/blog/state-of-ai-agent-memory-2026) ·
+[Comparison of Mem0, Zep, Graphiti, Letta, LangMem](https://medium.com/@wasowski.jarek/i-compared-5-ai-agent-memory-systems-across-6-dimensions-none-wins-6a658335ed0a) ·
+[SodaMem](https://arxiv.org/pdf/2608.08055) · [RippleMem](https://arxiv.org/pdf/2608.13334) · [MemCog](https://arxiv.org/pdf/2605.28046) ·
+[Memory reconsolidation](https://arxiv.org/pdf/2609.16053) · [Agent Zero Memory](https://arxiv.org/pdf/2608.29606)
+

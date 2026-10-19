@@ -154,6 +154,12 @@ dates are built from numbers so your region settings can't scramble them.
 - [D7](decision.md#d7-default-claude-effort-low): default Claude effort `low`.
 - [D8](decision.md#d8-gptgemini-default-ids-gpt-5--gemini-36-flash): GPT/Gemini default ids.
 
+## Deferred upgrades
+
+- **State-of-the-art second brain** (automatic memory, facts that age, links, semantic search, recall every turn,
+  conversation memory, nightly tidy-up, sources, HUD brain page, memory eval): parked by choice, see
+  [D59](decision.md#d59-state-of-the-art-second-brain-deferred-upgrades).
+
 ## Known issues
 
 | ID | Severity | One line | Blocks merge? |
