@@ -95,6 +95,10 @@ When a model runs into its rate limit or daily quota, Escanor carries on with th
 `[models] fallbacks` (default `groq → gemini → free`, skipping any without a key) and switches back once yours has
 rested. Free tiers change often; check each provider's limits page.
 
+Long conversations stay quick: past about 5,000 tokens, older turns are summed up and only the recent ones are sent
+in full (`[agent] compact_after_tokens`, 0 = off); the HUD still shows everything. If a spoken answer hasn't started
+after 12 seconds, Escanor says he'll tell you when it's ready and you can carry on (`[voice] defer_after_seconds`).
+
 ## Voice
 
 ```bash
@@ -230,6 +234,8 @@ Ctrl-C stops a reply mid-way. `escanor --continue` resumes the last conversation
 | `escanor brain reindex\|stats\|backup` | rebuild the search index, show size, commit notes to git |
 | `escanor service install\|uninstall\|status` | start the web UI at login (launchd) |
 | `escanor menubar` | the sun in the menu bar, with the global hotkeys |
+| `escanor doctor [--no-models]` | check keys, voices, mic, server, and every model you have a key for (live) |
+| `escanor mcp trust <server>` | accept a connector whose tools changed (they're blocked until you do) |
 | `escanor pair [--rotate\|--off]` | use Escanor from your phone |
 
 ## Configuration

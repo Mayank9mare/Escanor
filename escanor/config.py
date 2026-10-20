@@ -68,6 +68,11 @@ DEFAULTS: dict[str, Any] = {
     },
     "agent": {
         "max_steps": 8,
+        # Long conversations: past this many tokens of history, older turns are
+        # summed up and only ~keep_recent_tokens are sent exactly (core/compaction.py).
+        # 0 = never compact.
+        "compact_after_tokens": 5000,
+        "keep_recent_tokens": 1500,
     },
     "persona": {
         # "escanor": proud and regal by day, at his peak at high noon, humble at night
@@ -109,6 +114,9 @@ DEFAULTS: dict[str, Any] = {
         # "off": no talking over Escanor (safe on laptop speakers).
         # "headphones": interrupt it by talking (needs headphones; see listen.py).
         "barge_in": "off",
+        # A spoken answer that hasn't started after this long: Escanor says he'll
+        # tell you when it's ready, and you can carry on (0 = always wait).
+        "defer_after_seconds": 12,
     },
     "music": {
         "enabled": True,

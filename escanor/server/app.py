@@ -234,7 +234,8 @@ def create_server(app: Escanor, store: SessionStore, speech: Any | None, local_a
             if message:
                 await hub.broadcast(session.id, message)
         try:
-            await speak_turn(app.agent, session, text, speaker, confirmer, sink)
+            await speak_turn(app.agent, session, text, speaker, confirmer, sink,
+                             patience=float(app.settings["voice"].get("defer_after_seconds", 0)) or None)
         except asyncio.CancelledError:
             await hub.broadcast(session.id, {"type": "done", "stop_reason": "interrupted"})
             raise

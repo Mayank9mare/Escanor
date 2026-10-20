@@ -277,7 +277,7 @@ class ListenLoop:
                  transcribe: Callable[[bytes], str], respond: Callable[[str], Awaitable[None]],
                  audio, barge_in: bool = False, wait_enter: Callable[[], Awaitable[None]] | None = None,
                  on_status: Callable[[str], None] | None = None, settings: UtteranceSettings | None = None,
-                 wake_label: str = "hey Escanor"):
+                 wake_label: str = "hey Escanor", defer_after: float = 0.0):
         self._frames = frames
         self._vad = vad
         self._wake = wake
@@ -290,6 +290,11 @@ class ListenLoop:
         self._settings = settings
         self.chime_seconds = 0.35
         self._wake_label = wake_label
+        # A slow answer (no reply after defer_after s; speak_turn says "I'll tell
+        # you when it's ready") finishes in the background while the loop goes back
+        # to listening. A new question replaces it.
+        self.defer_after = defer_after
+        self._pending: asyncio.Future | None = None
 
     async def wait_for_wake(self) -> str:
         """Wait for the wake word. Returns anything said in the same breath
@@ -341,17 +346,35 @@ class ListenLoop:
         return await self._answer(text)
 
     async def _answer(self, text: str) -> str:
+        if self._pending is not None and not self._pending.done():
+            self._audio.interrupt()          # a new question replaces the late one
+            self._pending.cancel()
+            try:
+                await self._pending
+            except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                pass
+        self._pending = None
         self._status(f"You: {text}")
         turn = asyncio.ensure_future(self._respond(text))
-        if self._barge_in:
-            barge = asyncio.ensure_future(wait_for_speech(self._frames, self._vad))
-            done, _ = await asyncio.wait({turn, barge}, return_when=asyncio.FIRST_COMPLETED)
-            if barge in done and not turn.done():
-                self._audio.interrupt()
-                turn.cancel()
-                self._status("(interrupted)")
-            else:
-                barge.cancel()
+        barge = asyncio.ensure_future(wait_for_speech(self._frames, self._vad)) if self._barge_in else None
+        timer = asyncio.ensure_future(asyncio.sleep(self.defer_after)) if self.defer_after > 0 else None
+        done, _ = await asyncio.wait({t for t in (turn, barge, timer) if t}, return_when=asyncio.FIRST_COMPLETED)
+        for helper in (barge, timer):
+            if helper is not None and helper not in done:
+                helper.cancel()
+        if barge is not None and barge in done and not turn.done():
+            self._audio.interrupt()
+            turn.cancel()
+            self._status("(interrupted)")
+        elif timer is not None and timer in done and not turn.done():
+            self._pending = turn             # it carries on; its answer is spoken when ready
+            self._status("(answer to follow)")
+            await asyncio.sleep(0.05)        # let speak_turn queue its "I'll tell you" line
+            await self._audio.wait_idle()
+            drain = getattr(self._frames, "drain", None)
+            if drain:
+                drain()
+            return text
         try:
             await turn
         except asyncio.CancelledError:

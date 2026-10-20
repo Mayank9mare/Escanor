@@ -9,7 +9,7 @@ OpenRouter's 50 requests a day. When a model answers "rate limited" or
     gemini hits its quota -> "switched to groq" -> the same step is retried
 
 A per-minute limit rests the model only as long as the provider asks
-("try again in 7.3s"), else a minute. A request that sends nothing for 15 s (a stuck free-tier queue) fails over
+("try again in 7.3s"), else a minute. A request that sends nothing for 20 s (a stuck free-tier queue) fails over
 the same way and rests the model for two minutes.
 
 The exhausted model rests for a cooldown (longer for a daily quota), and

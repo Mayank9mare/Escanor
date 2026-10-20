@@ -10,6 +10,7 @@ Glue between the agent's event stream and the speaker:
   for hands-free use.
 """
 from __future__ import annotations
+import asyncio
 import re
 from typing import Awaitable, Callable
 from ..core.agent import Agent, Confirmer
@@ -36,35 +37,60 @@ def is_yes(answer: str) -> bool:
 
 
 async def speak_turn(agent: Agent, session: Session, text: str, audio: AudioOut | None,
-                     confirmer: Confirmer | None = None, sink: EventSink | None = None) -> list[Event]:
+                     confirmer: Confirmer | None = None, sink: EventSink | None = None,
+                     patience: float | None = None) -> list[Event]:
     """Run a turn, saying the reply aloud through `audio` (spoken style) or,
     with audio=None, as a normal text turn. Returns all events. Cancelling
     the calling task stops the turn; the caller should also call
-    audio.interrupt()."""
+    audio.interrupt().
+
+    patience: if no reply has started after this many seconds, say "I'll
+    tell you when it's ready" (the listen loop then goes back to waiting
+    for you), and introduce the answer when it comes. The turn itself keeps
+    running. Idea from JBIQ's deferred replies."""
     chunker = SentenceChunker()
     events: list[Event] = []
     said_working = False
-    async for event in agent.run_turn(session, text, confirmer, spoken=audio is not None):
-        events.append(event)
-        if sink is not None:
-            result = sink(event)
-            if result is not None:
-                await result
-        if audio is None:
-            continue
-        if isinstance(event, TextDelta):
-            for sentence in chunker.feed(event.text):
-                audio.say(sentence, REPLY)
-        elif isinstance(event, ToolStarted) and event.call.name in SLOW_TOOLS and not said_working:
-            said_working = True
-            for sentence in chunker.flush():   # anything said before the tool first
-                audio.say(sentence, REPLY)
-            audio.say(line("working"), REPLY)
-        elif isinstance(event, (TurnDone, Error)):
-            for sentence in chunker.flush():
-                audio.say(sentence, REPLY)
-            if isinstance(event, Error):
-                audio.say(line("error"), REPLY)
+    late = {"deferred": False, "started": False}
+
+    async def watch() -> None:
+        await asyncio.sleep(patience)
+        if not late["started"]:
+            late["deferred"] = True
+            audio.say(line("deferred"), REPLY)
+
+    watchdog = asyncio.ensure_future(watch()) if (audio is not None and patience) else None
+    try:
+        async for event in agent.run_turn(session, text, confirmer, spoken=audio is not None):
+            events.append(event)
+            if sink is not None:
+                result = sink(event)
+                if result is not None:
+                    await result
+            if audio is None:
+                continue
+            if isinstance(event, TextDelta):
+                if not late["started"]:
+                    late["started"] = True
+                    if watchdog is not None:
+                        watchdog.cancel()
+                    if late["deferred"]:
+                        audio.say(line("deferred_ready"), REPLY)
+                for sentence in chunker.feed(event.text):
+                    audio.say(sentence, REPLY)
+            elif isinstance(event, ToolStarted) and event.call.name in SLOW_TOOLS and not said_working:
+                said_working = True
+                for sentence in chunker.flush():   # anything said before the tool first
+                    audio.say(sentence, REPLY)
+                audio.say(line("working"), REPLY)
+            elif isinstance(event, (TurnDone, Error)):
+                for sentence in chunker.flush():
+                    audio.say(sentence, REPLY)
+                if isinstance(event, Error):
+                    audio.say(line("error"), REPLY)
+    finally:
+        if watchdog is not None:
+            watchdog.cancel()
     return events
 
 

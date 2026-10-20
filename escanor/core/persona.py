@@ -85,6 +85,20 @@ LINES = {
         "afternoon": "Give me a moment; I'll look.",
         "night": "Oh, just a moment, let me check...",
     },
+    "deferred": {
+        "dawn": "This will take a moment. I'll tell you when it's ready.",
+        "day": "This needs a moment. I'll tell you the instant it's done.",
+        "noon": "Even the sun takes a moment. I shall return with it.",
+        "afternoon": "Give me a little while; I'll tell you when it's ready.",
+        "night": "Oh, this is taking a while, sorry. I'll tell you when it's ready.",
+    },
+    "deferred_ready": {
+        "dawn": "About your question.",
+        "day": "Now, about your question.",
+        "noon": "It is done. Hear it.",
+        "afternoon": "Right, about your question.",
+        "night": "Um, about what you asked...",
+    },
     "voice_switched": {
         "dawn": "Very well. I shall speak like this.",
         "day": "Very well. Hear me now.",

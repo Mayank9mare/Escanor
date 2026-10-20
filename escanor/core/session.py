@@ -12,6 +12,13 @@ Message shapes (what Model.chat() / chat_stream_tools() accept):
    "raw": {...} | None, "model": "provider:model-id"}
   {"role": "tool", "tool_call_id": "...", "content": "...", "is_error": bool}
 
+plus one bookkeeping shape that never reaches a model:
+
+  {"role": "summary", "content": "..."}   -- compaction (core/compaction.py):
+      everything before it is summed up in its content; the model gets the
+      summary and only the messages after it. The full history stays here
+      (the HUD still shows it).
+
 Two invariants the providers rely on, enforced here rather than trusted:
 
 1. Every tool call has a result. Claude rejects a tool_use without a
@@ -146,6 +153,22 @@ class Session:
         if images:
             message["images"] = [str(path) for path in images]  # file paths; see models/images.py
         self._add(message)
+
+    def live(self) -> tuple[str, list[dict]]:
+        """What a model gets: the latest summary ('' if none) and the
+        messages after it."""
+        for i in range(len(self.messages) - 1, -1, -1):
+            if self.messages[i]["role"] == "summary":
+                return self.messages[i]["content"], self.messages[i + 1:]
+        return "", self.messages
+
+    def add_summary(self, before: int, summary: str) -> None:
+        """Compaction: insert a summary of everything before live() index
+        `before`, so later requests start from there."""
+        _, live = self.live()
+        at = len(self.messages) - len(live) + before
+        self.messages = [*self.messages[:at], {"role": "summary", "content": summary}, *self.messages[at:]]
+        self._store._replace_all(self.id, self.messages)
 
     def pending_tool_calls(self) -> list[ToolCall]:
         """Tool calls in the latest assistant message that have no result yet."""

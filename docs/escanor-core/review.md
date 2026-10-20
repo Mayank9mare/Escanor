@@ -187,6 +187,7 @@ in a new conversation from facts.md without a tool call.
 | Echo test (Phase 0) | speakers + music on, see if `listen` hears itself |
 | Hotkeys | `escanor menubar`, hold ⌃⌥Space; ⌃⌥E on a selection (allow Accessibility when asked) |
 | Phone | install Tailscale on both, `escanor pair`, open the link on the phone |
+| Everything at once | `escanor doctor` (live model checks; `--no-models` for local only) |
 
 ## How to verify locally
 

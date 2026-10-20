@@ -18,6 +18,7 @@ the next time a turn starts (Session.repair()).
 """
 from __future__ import annotations
 import asyncio
+import logging
 import threading
 from typing import AsyncIterator, Callable, Iterator, Protocol, TypeVar
 from ..models.base import Model, ModelResponse, ToolCall
@@ -31,6 +32,7 @@ from .router import Router, same_provider
 from .session import Session
 
 T = TypeVar("T")
+log = logging.getLogger(__name__)
 
 
 class Confirmer(Protocol):
@@ -120,6 +122,7 @@ class Agent:
         self.router: Router | None = None        # escalation to a stronger model (core/router.py)
         self.budget: DailyBudget | None = None   # daily spend cap (core/costs.py)
         self.failover: Failover | None = None    # next model when one is rate-limited (core/failover.py)
+        self.compactor = None                    # sums up long histories (core/compaction.py)
         self._failed_over = False
 
     def set_model(self, model: Model, model_spec: str) -> None:
@@ -198,6 +201,12 @@ class Agent:
             yield ModelSwitched(spec)
         session.repair()
         session.collapse_tool_history(self.model_spec)
+        if self.compactor is not None:
+            model = self.model
+            try:
+                await asyncio.to_thread(self.compactor.maybe_compact, session, model)
+            except Exception:  # noqa: BLE001 -- compaction must never cost the user their turn
+                log.exception("compaction failed")
         session.append_user(user_text)
         usage = {"input_tokens": 0, "output_tokens": 0}
 

@@ -106,14 +106,15 @@ def listen(app: Escanor, store: SessionStore, speech: SpeechEngine, use_enter: b
                 if isinstance(event, TextDelta):
                     print(event.text, end="", flush=True)
             print("escanor › ", end="", flush=True)
-            await speak_turn(app.agent, session, text, audio, confirmer, show)
+            await speak_turn(app.agent, session, text, audio, confirmer, show, patience=defer or None)
             print()
 
+        defer = float(app.settings["voice"].get("defer_after_seconds", 0))
         loop = ListenLoop(
             frames, EnergyVAD(), wake, speech.transcribe, respond, audio,
             barge_in=app.settings["voice"]["barge_in"] == "headphones",
             wait_enter=wait_enter, on_status=lambda s: print(f"· {s}", flush=True),
-            wake_label=wake_word.replace("_", " ").title(),
+            wake_label=wake_word.replace("_", " ").title(), defer_after=defer,
         )
         print(f"Escanor is listening ({app.agent.model_spec}). Ctrl-C to stop.")
         await app.start()

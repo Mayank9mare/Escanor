@@ -52,8 +52,9 @@ def _construct(provider: str, model_name: str, effort: str | None) -> Model:
                                f"get a free key at {config.COMPATIBLE[provider][1]}.")
         base_url = config.get_gemini_base_url() if provider == "gemini" else config.COMPATIBLE[provider][0]
         # Free tiers sometimes queue a request for half a minute: give up after
-        # 15 s of silence and let failover try the next model (core/failover.py).
-        return OpenAIModel(model_name=model_name, api_key=api_key, base_url=base_url, timeout=15.0)
+        # 20 s of silence and let failover try the next model (core/failover.py).
+        # (15 s was too tight for Gemini on a busy day: ~10 s for a one-word reply.)
+        return OpenAIModel(model_name=model_name, api_key=api_key, base_url=base_url, timeout=20.0)
 
     if provider == "ollama":
         from .ollama_provider import OllamaModel

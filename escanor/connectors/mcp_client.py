@@ -28,6 +28,14 @@ Safety (tools/permissions.py):
   shouldn't be configured at all.
 - Results are always untrusted_output: whatever an email or web page
   says is fenced as data.
+- Tools are pinned (pins.py idea from JBIQ's description-hash quarantine):
+  the first time Escanor sees a server's tool, it records a fingerprint
+  of its description, input schema and annotations in
+  ~/.escanor/mcp_pins.json. If a server later changes any of them -- a
+  "rug pull" that rewrites a description to steer the model, or flips a
+  tool to read-only so it stops asking -- that tool is blocked and /mcp
+  says so, until you run `escanor mcp trust <server>`. New tools are
+  pinned as they appear.
 
 Connections live in the running process: start() opens them one by
 one (each with a timeout) and stop() closes them, from the same task --
@@ -37,6 +45,7 @@ opened in parallel.
 from __future__ import annotations
 import asyncio
 import fnmatch
+import hashlib
 import json
 import logging
 import os
@@ -98,6 +107,46 @@ def result_text(result: Any) -> tuple[bool, str]:
     return not bool(getattr(result, "is_error", False)), text
 
 
+def fingerprint(remote: Any) -> str:
+    """What the model and the permission gate rely on: the description, the
+    input schema and the annotations (read-only etc.)."""
+    annotations = getattr(remote, "annotations", None)
+    shape = {
+        "description": remote.description or remote.title or "",
+        "schema": remote.input_schema or {},
+        "annotations": annotations.model_dump(exclude_none=True) if hasattr(annotations, "model_dump") else annotations,
+    }
+    return hashlib.sha256(json.dumps(shape, sort_keys=True, default=str).encode()).hexdigest()[:32]
+
+
+class Pins:
+    """Fingerprints of the MCP tools you've accepted, in mcp_pins.json."""
+
+    def __init__(self, path: Path | None):
+        self.path = path
+        try:
+            self.data: dict[str, dict[str, str]] = json.loads(path.read_text()) if path else {}
+        except (OSError, ValueError):
+            self.data = {}
+
+    def check(self, server: str, tool: str, print_: str) -> bool:
+        """True if the tool is as pinned (or new, and now pinned)."""
+        pinned = self.data.setdefault(server, {})
+        if tool not in pinned:
+            pinned[tool] = print_
+            return True
+        return pinned[tool] == print_
+
+    def trust(self, server: str) -> bool:
+        """Forget a server's pins: its tools are re-pinned as they are now."""
+        return self.data.pop(server, None) is not None
+
+    def save(self) -> None:
+        if self.path is not None:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.path.write_text(json.dumps(self.data, indent=2, sort_keys=True) + "\n")
+
+
 class MCPTool(AsyncTool):
     untrusted_output = True
 
@@ -134,6 +183,8 @@ class ServerConnection:
     status: str = "not connected"
     tools: list[MCPTool] = field(default_factory=list)
     instructions: str = ""
+    fingerprints: dict[str, str] = field(default_factory=dict)
+    blocked: list[str] = field(default_factory=list)
 
     async def connect(self, stack: AsyncExitStack) -> None:
         from mcp import ClientSession, StdioServerParameters
@@ -156,6 +207,7 @@ class ServerConnection:
         listed = await self.session.list_tools()
         auto = list(self.config.get("auto_approve", []))
         self.tools = [MCPTool(self, remote, auto) for remote in listed.tools]
+        self.fingerprints = {remote.name: fingerprint(remote) for remote in listed.tools}
         self.status = f"connected, {len(self.tools)} tools"
 
     async def call(self, tool: str, arguments: dict) -> ToolResult:
@@ -173,13 +225,14 @@ class ServerConnection:
 
 class MCPManager:
     def __init__(self, servers: dict[str, dict], registry: ToolRegistry, group_descriptions: dict[str, str],
-                 log_dir: Path | None = None):
+                 log_dir: Path | None = None, pins_path: Path | None = None):
         self.registry = registry
         self.group_descriptions = group_descriptions
         logs = log_dir or Path.home() / ".escanor" / "logs"
         self.servers = {name: ServerConnection(name, cfg, logs / f"mcp-{name}.log")
                         for name, cfg in servers.items() if cfg.get("enabled", True)}
         self._stack: AsyncExitStack | None = None
+        self.pins = Pins(pins_path)
 
     async def start(self) -> None:
         """Connect every server; a failing one is reported, not fatal."""
@@ -192,6 +245,18 @@ class MCPManager:
                 server.status = f"failed: {type(e).__name__}: {e}"[:300]
                 log.warning("MCP server %s: %s", server.name, server.status)
                 continue
+            allowed = []
+            for tool in server.tools:
+                if self.pins.check(server.name, tool.remote_name, server.fingerprints.get(tool.remote_name, "")):
+                    allowed.append(tool)
+                else:
+                    server.blocked.append(tool.remote_name)
+            self.pins.save()
+            if server.blocked:
+                server.status += (f"; BLOCKED (changed since you accepted them): {', '.join(server.blocked)}"
+                                  f" -- run `escanor mcp trust {server.name}` if that's expected")
+                log.warning("MCP server %s changed tools %s; blocked", server.name, server.blocked)
+            server.tools = allowed
             for tool in server.tools:
                 if self.registry.get(tool.name) is None:
                     self.registry.add(tool)

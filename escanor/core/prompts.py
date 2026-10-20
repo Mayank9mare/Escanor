@@ -70,8 +70,12 @@ class PromptBuilder:
         return "\n\n".join(parts)
 
     def build(self, session: Session, spoken: bool = False) -> list[dict]:
-        messages = [{"role": "system", "content": self.system_prompt(spoken)}, *session.messages]
-        if session.messages and session.messages[-1]["role"] == "assistant":
+        summary, live = session.live()
+        system = self.system_prompt(spoken)
+        if summary:  # compacted (core/compaction.py): earlier turns arrive as this summary
+            system += f"\n\nEarlier in this conversation (summarised):\n{summary}"
+        messages = [{"role": "system", "content": system}, *live]
+        if live and live[-1]["role"] == "assistant":
             # After a mid-turn switch to another provider, the tool calls so far are
             # folded into assistant text, so the request would end on the model's own
             # turn -- which Gemini (and Claude) refuse (B27). Ask it to carry on; this

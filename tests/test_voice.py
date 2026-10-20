@@ -415,3 +415,57 @@ async def test_says_it_is_working_once_when_a_slow_tool_runs(tmp_path):
     await speak_turn(Agent(MockModel(script=script), "mock:m"), SessionStore(tmp_path / "s.db").create(), "look", ear)
     from escanor.core.persona import LINES
     assert sum(s in LINES["working"].values() for s in ear.said) == 1 and ear.said[-1] == "Found it."
+
+
+# ---------- late answers (deferral) ----------
+
+async def test_slow_answer_is_announced_then_introduced(tmp_path):
+    import time as _time
+    from escanor.core.agent import Agent
+    from escanor.core.persona import LINES
+    from escanor.core.session import SessionStore
+    from escanor.models.base import ModelResponse
+    from escanor.models.mock_provider import MockModel
+    from escanor.voice.conversation import speak_turn
+
+    class Slow(MockModel):
+        def chat_stream_tools(self, messages, tools=None):
+            _time.sleep(0.3)
+            yield from super().chat_stream_tools(messages, tools)
+
+    class Ear:
+        def __init__(self):
+            self.said = []
+
+        def say(self, text, priority=None):
+            self.said.append(text)
+
+    ear = Ear()
+    agent = Agent(Slow(script=[ModelResponse(text="Tokyo is seven hours ahead.")]), "mock:m")
+    await speak_turn(agent, SessionStore(tmp_path / "s.db").create(), "time in Tokyo?", ear, patience=0.05)
+    assert ear.said[0] in LINES["deferred"].values() and ear.said[1] in LINES["deferred_ready"].values()
+    assert ear.said[-1] == "Tokyo is seven hours ahead."
+    fast = Ear()
+    agent = Agent(MockModel(script=[ModelResponse(text="Quick.")]), "mock:m")
+    await speak_turn(agent, SessionStore(tmp_path / "t.db").create(), "hi", fast, patience=5)
+    assert fast.said == ["Quick."]
+
+
+async def test_listen_loop_moves_on_from_a_slow_answer_and_a_new_question_replaces_it():
+    audio = AudioOut(_tts, NullPlayer())
+    finished, cancelled = [], []
+
+    async def respond(text):
+        try:
+            await asyncio.sleep(0.5 if text == "slow" else 0)
+            finished.append(text)
+        except asyncio.CancelledError:
+            cancelled.append(text)
+            raise
+
+    loop = ListenLoop(_aiter([]), EnergyVAD(), None, lambda wav: "", respond, audio, defer_after=0.05)
+    assert await loop._answer("slow") == "slow"
+    assert loop._pending is not None and not loop._pending.done() and finished == []
+    await loop._answer("fast")
+    assert cancelled == ["slow"] and finished == ["fast"]
+    await audio.close()

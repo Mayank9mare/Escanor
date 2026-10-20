@@ -108,6 +108,10 @@ def build_app(settings: dict, model: Model, model_spec: str) -> Escanor:
     if settings["router"].get("escalate_to"):
         agent.router = Router(lambda name: build_model(name, settings), settings["router"]["escalate_to"],
                               int(settings["router"].get("after_steps", 0)))
+    if int(settings["agent"].get("compact_after_tokens", 0)) > 0:
+        from .core.compaction import Compactor
+        agent.compactor = Compactor(int(settings["agent"]["compact_after_tokens"]),
+                                    int(settings["agent"].get("keep_recent_tokens", 1500)))
     if settings["models"].get("fallbacks"):
         from .core.failover import Failover
         agent.failover = Failover(lambda name: build_model(name, settings), settings["models"]["fallbacks"],
@@ -151,7 +155,7 @@ def install_mcp(escanor: Escanor) -> None:
     """MCP servers from [mcp.servers.*]; connected when the interface starts."""
     from .connectors.mcp_client import MCPManager
     manager = MCPManager(escanor.settings["mcp"]["servers"], escanor.agent.tools, GROUP_DESCRIPTIONS,
-                         log_dir=config.data_dir() / "logs")
+                         log_dir=config.data_dir() / "logs", pins_path=config.data_dir() / "mcp_pins.json")
     escanor.services["mcp"] = manager
     escanor.on_start.append(manager.start)
     escanor.on_stop.append(manager.stop)

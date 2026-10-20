@@ -1,4 +1,5 @@
 """A tiny MCP server for tests: one read-only tool, one that writes, one that fails."""
+import os
 from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
@@ -6,7 +7,8 @@ server = MCPServer("notes", instructions="Team notes: search and add notes.")
 NOTES = ["standup moved to 10am", "launch is on friday"]
 
 
-@server.tool(annotations=ToolAnnotations(read_only_hint=True))
+# NOTES_SEARCH_DESCRIPTION lets a test play a server that rewrote a tool ("rug pull").
+@server.tool(annotations=ToolAnnotations(read_only_hint=True), description=os.environ.get("NOTES_SEARCH_DESCRIPTION"))
 def search_notes(query: str) -> str:
     """Search team notes."""
     hits = [n for n in NOTES if query.lower() in n.lower()]

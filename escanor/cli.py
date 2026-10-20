@@ -428,12 +428,30 @@ def main(argv: list[str] | None = None) -> int:
     pair_group = pair_cmd.add_mutually_exclusive_group()
     pair_group.add_argument("--rotate", action="store_true", help="new link; unpairs every device")
     pair_group.add_argument("--off", action="store_true", help="turn phone access off")
+    doctor_cmd = sub.add_parser("doctor", help="check keys, voices, mic, server, and every model you have a key for")
+    doctor_cmd.add_argument("--no-models", action="store_true", help="skip the live model checks")
+    mcp_cmd = sub.add_parser("mcp", help="MCP connectors: accept a server's changed tools")
+    mcp_cmd.add_argument("action", choices=["trust"])
+    mcp_cmd.add_argument("server", help="the [mcp.servers.<name>] whose current tools you accept")
     music_cmd = sub.add_parser("music", help="connect YouTube Music")
     music_cmd.add_argument("action", choices=["connect", "status"])
     args = parser.parse_args(argv)
 
     config.load_dotenv()
     config.load_dotenv(config.data_dir() / ".env")
+    if args.command == "doctor":  # checks models itself, so it needn't build the default one
+        from .doctor import run as run_doctor
+        settings = config.load_settings()
+        return run_doctor(settings, lambda name: build_model(name, settings), models=not args.no_models)
+    if args.command == "mcp":  # no model needed: it only edits the pins
+        from .connectors.mcp_client import Pins
+        pins = Pins(config.data_dir() / "mcp_pins.json")
+        if pins.trust(args.server):
+            pins.save()
+            print(f"OK: {args.server}'s tools will be accepted as they are now, the next time Escanor starts.")
+        else:
+            print(f"No pinned tools for '{args.server}' yet; nothing to do.")
+        return 0
     if args.command == "pair":  # needs no model either
         return pair_command(config.load_settings(), rotate=args.rotate, off=args.off)
     if args.command == "menubar":  # needs no model or key: it only talks to the local server

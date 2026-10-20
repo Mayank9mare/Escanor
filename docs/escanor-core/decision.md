@@ -1157,3 +1157,50 @@ Letta and 2026 memory papers, and are parked here in suggested order (1, 2, 4, 5
 [SodaMem](https://arxiv.org/pdf/2608.08055) · [RippleMem](https://arxiv.org/pdf/2608.13334) · [MemCog](https://arxiv.org/pdf/2605.28046) ·
 [Memory reconsolidation](https://arxiv.org/pdf/2609.16053) · [Agent Zero Memory](https://arxiv.org/pdf/2608.29606)
 
+---
+
+## D60. Compaction: summarise old turns past a token budget (on by default)
+
+**Status:** Accepted · **Date:** 2026-10-21 · From JBIQ's ADK compaction ("compact past a token count, keep the last N exact")
+
+Every request re-sent the whole conversation; on Groq's free 8,000 tokens/minute that caused queueing (B28).
+[compaction.py](../../escanor/core/compaction.py): at turn start, if the live history is over `compact_after_tokens` (5,000),
+the model sums up everything but the last ~`keep_recent_tokens` (1,500) into a rolling summary, cut at a user message so
+tool pairs stay whole. The summary is a `{"role": "summary"}` marker in the session ([Session.live](../../escanor/core/session.py)):
+models get it in the system prompt plus the messages after it; the HUD still shows the full history. A failed summary
+changes nothing. Live on Groq: 3,429 → 1,215 tokens in 1.7 s with every number kept. JBIQ keeps it off by default; here
+it's on because Escanor mostly runs on free tiers.
+
+---
+
+## D61. `escanor doctor`: one live conformance suite for every model
+
+**Status:** Accepted · **Date:** 2026-10-21 · From JBIQ's per-port conformance suites
+
+[doctor.py](../../escanor/doctor.py) runs reply / tool / replay / switch on every alias with a key, through the real message
+shapes (PromptBuilder + Session), plus local checks (keys by name, voices, mic, server, YouTube Music, phone, Accessibility,
+brain). The `switch` check is the one that would have caught B27. First run found Gemini at ~10 s per reply, which led to
+raising the compatible-provider timeout from 15 to 20 s.
+
+---
+
+## D62. Pin MCP tool descriptions, schemas and annotations
+
+**Status:** Accepted · **Date:** 2026-10-21 · From JBIQ's description-hash quarantine
+
+A connector could later rewrite a tool's description to steer the model, or flip `readOnlyHint` so it stops asking. The first
+time a tool is seen its fingerprint goes to `~/.escanor/mcp_pins.json`; a changed tool is not registered and `/mcp` says
+BLOCKED until `escanor mcp trust <server>` ([mcp_client.py](../../escanor/connectors/mcp_client.py)). Trust on first use:
+the first sight is not verified.
+
+---
+
+## D63. Late spoken answers: say so, free the user, introduce the answer
+
+**Status:** Accepted · **Date:** 2026-10-21 · From JBIQ's deferred replies (simplified: no notification service)
+
+If a spoken reply hasn't started after `[voice] defer_after_seconds` (12), Escanor says he'll tell you when it's ready; the
+listen loop goes back to the wake word while the turn finishes, and the answer is introduced when it arrives
+("Now, about your question."). A new question cancels the late one, the same rule as typing over Escanor
+([conversation.py](../../escanor/voice/conversation.py), [listen.py](../../escanor/voice/listen.py)).
+

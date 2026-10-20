@@ -195,10 +195,10 @@ def test_timeout_fails_over_with_a_short_rest():
     assert not failover.resting("groq:x")
 
 
-def test_compatible_providers_give_up_after_15_seconds(monkeypatch):
+def test_compatible_providers_give_up_after_20_seconds(monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "gsk_test")
     client = get_model("groq", "openai/gpt-oss-120b")._inner._client
-    assert client.timeout.read == 15.0 and client.max_retries == 0
+    assert client.timeout.read == 20.0 and client.max_retries == 0
 
 
 @pytest.mark.parametrize("message,rest", [
