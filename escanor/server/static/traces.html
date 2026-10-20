@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0503">
+  <link rel="icon" href="/static/icon-192.png">
+  <title>Escanor Traces</title>
+  <style>
+    /* Same palette as the HUD (style.css); dark by design. */
+    :root {
+      --bg: #0b0503; --bg-2: #160806; --panel: rgb(30 12 6 / 0.72); --line: rgb(255 176 0 / 0.2);
+      --text: #fff1d6; --muted: #b08a63; --accent: #ffb000; --accent-2: #ff6a13; --danger: #ff4d5e;
+      --model: #ffb000; --tool: #4fc3f7; --stt: #b39ddb; --tts: #81c784; --failover: #ff4d5e; --compaction: #ff8a65;
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; color: var(--text);
+      background: radial-gradient(1100px 700px at 50% 0%, rgb(120 40 8 / 0.35), transparent 70%), linear-gradient(var(--bg), var(--bg-2));
+      font: 14px/1.5 "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+    }
+    header { display: flex; align-items: baseline; gap: 16px; padding: 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+    header h1 { margin: 0; font-size: 15px; letter-spacing: 0.3em; color: var(--accent); }
+    header span { color: var(--muted); font-size: 12px; }
+    header a { margin-left: auto; color: var(--accent); }
+    label { color: var(--muted); font-size: 12px; }
+    main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 16px; padding: 16px; }
+    @media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); } }
+    section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+    section h2 { margin: 0; padding: 10px 12px; font-size: 12px; letter-spacing: 0.2em; color: var(--muted); border-bottom: 1px solid var(--line); }
+    .turns { max-height: calc(100vh - 140px); overflow: auto; }
+    .turn { display: grid; grid-template-columns: 7.5em 5em 4.5em 1fr; gap: 8px; padding: 8px 12px; border-bottom: 1px solid rgb(255 176 0 / 0.08); cursor: pointer; align-items: baseline; }
+    .turn:hover, .turn:focus { background: rgb(255 176 0 / 0.07); outline: none; }
+    .turn.selected { background: rgb(255 176 0 / 0.14); }
+    .turn .when, .turn .src { color: var(--muted); font-size: 12px; }
+    .turn .total { text-align: right; }
+    .turn .total.slow { color: var(--accent-2); }
+    .turn .total.bad { color: var(--danger); }
+    .turn .said { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .detail { padding: 12px; }
+    .detail .said { margin: 0 0 4px; }
+    .detail .meta { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+    .stats { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 14px; }
+    .stats div { font-size: 12px; color: var(--muted); }
+    .stats b { display: block; font-size: 18px; color: var(--text); font-weight: 500; }
+    .row { display: grid; grid-template-columns: 6.5em minmax(0, 11em) minmax(0, 1fr) 4.5em; gap: 8px; align-items: center; padding: 3px 0; font-size: 12px; }
+    .row .kind { color: var(--muted); }
+    .row .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .row .ms { text-align: right; }
+    .track { position: relative; height: 12px; background: rgb(255 255 255 / 0.03); border-radius: 3px; }
+    .bar { position: absolute; top: 0; bottom: 0; min-width: 2px; border-radius: 3px; opacity: 0.85; }
+    .bar.slow { box-shadow: 0 0 10px var(--accent-2); }
+    .row .info { grid-column: 2 / -1; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: -2px; }
+    .status { color: var(--danger); }
+    .empty { padding: 24px 12px; color: var(--muted); }
+    .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; color: var(--muted); margin-top: 14px; }
+    .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>☀︎ TRACES</h1><span>where each turn's seconds went · local to this Mac</span>
+    <label><input type="checkbox" id="slow"> only slow (&gt;10 s)</label>
+    <a href="/">← Escanor</a>
+  </header>
+  <main>
+    <section><h2>RECENT TURNS</h2><div class="turns" id="turns" role="list"></div></section>
+    <section><h2>TIMELINE</h2><div class="detail" id="detail"><div class="empty">Pick a turn.</div></div></section>
+  </main>
+  <script src="/static/traces.js"></script>
+</body>
+</html>

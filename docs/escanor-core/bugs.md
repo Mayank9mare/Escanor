@@ -284,6 +284,19 @@ breaks an edge case or error path · **LOW** = minor or cosmetic.
   `test_compatible_providers_give_up_after_15_seconds` ([test_failover.py](../../tests/test_failover.py));
   `test_says_it_is_working_once_when_a_slow_tool_runs` ([test_voice.py](../../tests/test_voice.py))
 
+### ~~B29. Model calls were timestamped when they ended, not when they started~~
+
+- **Severity:** LOW · **Found:** 2026-10-21, building the trace timeline · **Fixed:** same day
+- **Root cause:** `record_call` stored `_now()` (the end) as `started_at`.
+- **Fix:** start = now − duration ([telemetry.record_call](../../escanor/telemetry.py)).
+
+### ~~B30. "First sound" was lost for spoken turns~~
+
+- **Severity:** MEDIUM · **Found:** 2026-10-21, `test_spoken_turn_records_speech_and_first_sound` · **Fixed:** same day
+- **Root cause:** the first sentence plays while the turn is still running, before its receipt row exists, so the update
+  matched nothing.
+- **Fix:** an early first-sound time is held and applied when the receipt is written.
+
 ---
 
 ## ⏸️ Deferred / 🚫 Won't fix

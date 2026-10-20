@@ -106,7 +106,14 @@ def listen(app: Escanor, store: SessionStore, speech: SpeechEngine, use_enter: b
                 if isinstance(event, TextDelta):
                     print(event.text, end="", flush=True)
             print("escanor › ", end="", flush=True)
-            await speak_turn(app.agent, session, text, audio, confirmer, show, patience=defer or None)
+            from .. import telemetry
+            trace = telemetry.new_trace_id()
+            if loop.last_stt is not None:
+                started, ms = loop.last_stt
+                telemetry.record_event(trace, "stt", "microphone", ms, started=started)
+                loop.last_stt = None
+            await speak_turn(app.agent, session, text, audio, confirmer, show, patience=defer or None,
+                             source="voice", trace_id=trace)
             print()
 
         defer = float(app.settings["voice"].get("defer_after_seconds", 0))

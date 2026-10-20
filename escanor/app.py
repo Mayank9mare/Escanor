@@ -108,6 +108,8 @@ def build_app(settings: dict, model: Model, model_spec: str) -> Escanor:
     if settings["router"].get("escalate_to"):
         agent.router = Router(lambda name: build_model(name, settings), settings["router"]["escalate_to"],
                               int(settings["router"].get("after_steps", 0)))
+    from .export import configure as configure_export
+    configure_export(settings)
     if int(settings["agent"].get("compact_after_tokens", 0)) > 0:
         from .core.compaction import Compactor
         agent.compactor = Compactor(int(settings["agent"]["compact_after_tokens"]),

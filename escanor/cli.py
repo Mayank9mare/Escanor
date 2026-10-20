@@ -182,7 +182,7 @@ class Repl:
 
     async def run_turn(self, text: str) -> None:
         printed_text = False
-        async for event in self.agent.run_turn(self.session, text, self.confirmer):
+        async for event in self.agent.run_turn(self.session, text, self.confirmer, source="chat"):
             if isinstance(event, TextDelta):
                 print(event.text, end="", flush=True)
                 printed_text = True
@@ -428,6 +428,10 @@ def main(argv: list[str] | None = None) -> int:
     pair_group = pair_cmd.add_mutually_exclusive_group()
     pair_group.add_argument("--rotate", action="store_true", help="new link; unpairs every device")
     pair_group.add_argument("--off", action="store_true", help="turn phone access off")
+    trace_cmd = sub.add_parser("trace", help="recent turns, or one turn as a timeline (where the seconds went)")
+    trace_cmd.add_argument("id", nargs="?", help="a turn id (any unique prefix)")
+    trace_cmd.add_argument("-n", type=int, default=20, help="how many turns to list (default 20)")
+    trace_cmd.add_argument("--slow", action="store_true", help="only turns over 10 s")
     doctor_cmd = sub.add_parser("doctor", help="check keys, voices, mic, server, and every model you have a key for")
     doctor_cmd.add_argument("--no-models", action="store_true", help="skip the live model checks")
     mcp_cmd = sub.add_parser("mcp", help="MCP connectors: accept a server's changed tools")
@@ -439,6 +443,9 @@ def main(argv: list[str] | None = None) -> int:
 
     config.load_dotenv()
     config.load_dotenv(config.data_dir() / ".env")
+    if args.command == "trace":  # reads telemetry only
+        from .trace_view import main as show_trace
+        return show_trace(args.id, args.n, args.slow)
     if args.command == "doctor":  # checks models itself, so it needn't build the default one
         from .doctor import run as run_doctor
         settings = config.load_settings()

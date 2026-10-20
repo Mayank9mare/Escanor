@@ -171,6 +171,14 @@ DEFAULTS: dict[str, Any] = {
         "explain": "ctrl+option+e",      # explain the selected text (or Finder file)
         "explain_aloud": False,          # also speak the explanation, not just show it
     },
+    "telemetry": {
+        # Traces stay in ~/.escanor/telemetry.db (`escanor trace`, the HUD's Traces page).
+        # export = "otlp" also sends each turn to an OpenTelemetry endpoint (export.py).
+        "export": "",
+        "otlp_endpoint": "",
+        "otlp_headers": {},
+        "include_text": False,   # true also sends what you said and tool arguments
+    },
     "server": {
         "host": "127.0.0.1",
         "port": 8770,

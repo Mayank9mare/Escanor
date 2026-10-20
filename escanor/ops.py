@@ -144,7 +144,7 @@ async def run_eval(agent: Agent, store: SessionStore, cases: list[EvalCase] = CA
         agent.tools.reset()
         called: list[str] = []
         errored = False
-        async for event in agent.run_turn(store.create(), case.prompt):
+        async for event in agent.run_turn(store.create(), case.prompt, source="eval"):
             if isinstance(event, ToolStarted):
                 called.append(event.call.name)
             elif isinstance(event, Error) and not called:

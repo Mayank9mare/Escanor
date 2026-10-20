@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Protocol
 
+from .. import telemetry
 log = logging.getLogger(__name__)
 
 CONFIRM, REPLY, TIMER, DJ = 0, 1, 2, 3
@@ -95,6 +96,8 @@ class _Item:
     text: str = field(compare=False)
     audio: asyncio.Future = field(compare=False)
     done: asyncio.Future = field(compare=False)
+    trace: str | None = field(default=None, compare=False)     # the turn it belongs to (telemetry)
+    queued: float = field(default=0.0, compare=False)
 
 
 class AudioOut:
@@ -113,6 +116,7 @@ class AudioOut:
         self._ducked = False
         self._ducker_warned = False
         self._prefetched: dict[str, asyncio.Future] = {}
+        self._turn_started: dict[str, float] = {}
         self._task: asyncio.Task | None = None
         self.on_speaking: Callable[[bool], None] | None = None
         # Called with each WAV just before it plays (the HUD lip-syncs to it).
@@ -142,13 +146,18 @@ class AudioOut:
         if text not in self._prefetched:
             self._prefetched[text] = asyncio.get_running_loop().run_in_executor(None, self._synthesize, text)
 
-    def say(self, text: str, priority: int = REPLY) -> asyncio.Future:
+    def mark_turn(self, trace: str, started: float) -> None:
+        """Note when a turn began (time.monotonic()), so its first sound can
+        be timed: the voice metric that matters most."""
+        self._turn_started[trace] = started
+
+    def say(self, text: str, priority: int = REPLY, trace: str | None = None) -> asyncio.Future:
         """Queue `text`; returns a future done when it has been spoken (or dropped)."""
         loop = asyncio.get_running_loop()
         self.start()
         audio = self._prefetched.pop(text, None) or loop.run_in_executor(None, self._synthesize, text)
         done = loop.create_future()
-        item = _Item(priority, next(self._seq), text, audio, done)
+        item = _Item(priority, next(self._seq), text, audio, done, trace, time.monotonic())
         heapq.heappush(self._queue, item)
         if self._current is not None and priority < self._current.priority:
             self._stop_current.set()  # more important: cut the current one off
@@ -226,9 +235,17 @@ class AudioOut:
                     wav = await item.audio
                 except Exception:  # noqa: BLE001
                     log.exception("speech synthesis failed for %r", item.text[:60])
+                    telemetry.record_event(item.trace, "tts", "sentence", status="error",
+                                           detail={"chars": len(item.text)})
                     item.done.set_result(False)
                     self._current = None
                     continue
+                if item.trace:
+                    telemetry.record_event(item.trace, "tts", "sentence", (time.monotonic() - item.queued) * 1000,
+                                           detail={"chars": len(item.text)})
+                    started = self._turn_started.pop(item.trace, None)
+                    if started is not None:   # the turn's first sound
+                        telemetry.record_first_audio(item.trace, (time.monotonic() - started) * 1000)
                 if self._stop_current.is_set():  # interrupted while synthesizing
                     item.done.set_result(False)
                     self._current = None

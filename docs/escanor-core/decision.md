@@ -1204,3 +1204,21 @@ listen loop goes back to the wake word while the turn finishes, and the answer i
 ("Now, about your question."). A new question cancels the late one, the same rule as typing over Escanor
 ([conversation.py](../../escanor/voice/conversation.py), [listen.py](../../escanor/voice/listen.py)).
 
+---
+
+## D64. Turns as traces: receipts, spans, `escanor trace`, Traces page, optional OTLP
+
+**Status:** Accepted · **Date:** 2026-10-21
+
+Before, every model call was recorded but as its own one-call "untraced" trace; nothing else in a turn was recorded.
+Now `Agent.run_turn` mints a trace per turn and attributes model calls through `InstrumentedModel.traced()` (a per-turn
+copy: concurrent turns can't mix, unlike the shared `with_trace()`); tools, failovers, compaction, speech-to-text and
+each spoken sentence are `spans`; a `turns` receipt (from JBIQ's always-last TurnEndEvent) holds source, total, time to
+first word and first sound, steps, tools, tokens, cost and outcome ([telemetry.py](../../escanor/telemetry.py)).
+Views: `escanor trace` ([trace_view.py](../../escanor/trace_view.py)) and `/traces` (local only). Export: OTLP/HTTP JSON
+with GenAI semantic conventions, off by default, words excluded unless `include_text` ([export.py](../../escanor/export.py)).
+
+**Options considered:** the OpenTelemetry SDK (heavier, a dependency for an off-by-default feature), Langfuse's SDK
+(one vendor), or hand-built OTLP JSON (chosen: no dependency, works with any collector).
+**Trade-off:** sentences spoken after the receipt is written aren't in the exported trace (they stay local).
+

@@ -22,6 +22,7 @@ import io
 import re
 import logging
 import subprocess
+import time
 import wave
 from dataclasses import dataclass
 from typing import AsyncIterator, Awaitable, Callable, Protocol
@@ -295,6 +296,7 @@ class ListenLoop:
         # to listening. A new question replaces it.
         self.defer_after = defer_after
         self._pending: asyncio.Future | None = None
+        self.last_stt: tuple[float, float] | None = None   # (time.time() started, ms) of the latest transcription
 
     async def wait_for_wake(self) -> str:
         """Wait for the wake word. Returns anything said in the same breath
@@ -324,7 +326,10 @@ class ListenLoop:
         if not frames:
             return ""
         self._status("Transcribing…")
-        return (await asyncio.to_thread(self._transcribe, to_wav(frames))).strip()
+        started, clock = time.time(), time.monotonic()
+        text = (await asyncio.to_thread(self._transcribe, to_wav(frames))).strip()
+        self.last_stt = (started, (time.monotonic() - clock) * 1000)   # traced by the caller's turn
+        return text
 
     async def once(self) -> str:
         """One wake → hear → respond cycle. Returns what was heard."""

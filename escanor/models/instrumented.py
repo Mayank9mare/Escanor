@@ -34,6 +34,14 @@ class InstrumentedModel(Model):
         self._trace_id: str | None = None
         self._component: str | None = None
 
+    def traced(self, trace_id: str, component: str) -> "InstrumentedModel":
+        """A copy attributed to one trace (a turn). Unlike with_trace(), it
+        leaves this shared instance alone, so concurrent turns -- a page and
+        a hotkey, or the DJ -- never record into each other's trace."""
+        copy = InstrumentedModel(self._inner, self._provider, self._role)
+        copy._trace_id, copy._component = trace_id, component
+        return copy
+
     def with_trace(self, trace_id: str, component: str = "untraced") -> "InstrumentedModel":
         self._trace_id = trace_id
         self._component = component

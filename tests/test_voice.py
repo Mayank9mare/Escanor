@@ -405,7 +405,7 @@ async def test_says_it_is_working_once_when_a_slow_tool_runs(tmp_path):
         def __init__(self):
             self.said = []
 
-        def say(self, text, priority=None):
+        def say(self, text, priority=None, trace=None):
             self.said.append(text)
 
     script = [ModelResponse(tool_calls=[ToolCall("1", "web_search", {"query": "a"})]),
@@ -437,7 +437,7 @@ async def test_slow_answer_is_announced_then_introduced(tmp_path):
         def __init__(self):
             self.said = []
 
-        def say(self, text, priority=None):
+        def say(self, text, priority=None, trace=None):
             self.said.append(text)
 
     ear = Ear()

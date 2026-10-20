@@ -18,13 +18,17 @@ the next time a turn starts (Session.repair()).
 """
 from __future__ import annotations
 import asyncio
+import json
 import logging
+import time
 import threading
 from typing import AsyncIterator, Callable, Iterator, Protocol, TypeVar
 from ..models.base import Model, ModelResponse, ToolCall
 from ..tools.base import ToolResult
+from ..tools.permissions import DECLINED
 from ..tools.registry import ToolRegistry
 from .events import Error, Event, ModelSwitched, TextDelta, ToolFinished, ToolStarted, TurnDone
+from .. import telemetry
 from .costs import DailyBudget
 from .failover import Failover, is_limit_error
 from .prompts import PromptBuilder
@@ -163,24 +167,74 @@ class Agent:
         return self.tools.schemas()
 
     async def run_turn(self, session: Session, user_text: str, confirmer: Confirmer | None = None,
-                       spoken: bool = False) -> AsyncIterator[Event]:
+                       spoken: bool = False, source: str = "chat", trace_id: str | None = None) -> AsyncIterator[Event]:
         """One turn. spoken=True asks for a reply suited to being read aloud.
         An escalated turn (router) runs on the stronger model and hands back
-        to the normal one afterwards."""
+        to the normal one afterwards.
+
+        The turn is one trace (telemetry.py): `trace_id` (or a new one) tags
+        every model call, tool, failover and compaction in it, and a receipt
+        row is written when it ends, however it ends. `source` says where it
+        came from: chat, hud, voice, hotkey, explain, eval..."""
         home = (self.model, self.model_spec)
         self._failed_over = False
+        trace = trace_id or telemetry.new_trace_id()
+        receipt = {"started": time.time(), "clock": time.monotonic(), "ttft": None, "tools": 0, "steps": 0,
+                   "outcome": None, "error": None, "usage": {}}
         try:
-            async for event in self._steps(session, user_text, confirmer or DenyConfirmer(), spoken):
+            async for event in self._steps(session, user_text, confirmer or DenyConfirmer(), spoken, trace, source):
+                if isinstance(event, TextDelta) and receipt["ttft"] is None:
+                    receipt["ttft"] = (time.monotonic() - receipt["clock"]) * 1000
+                elif isinstance(event, ToolStarted):
+                    receipt["tools"] += 1
+                elif isinstance(event, TurnDone):
+                    receipt["outcome"], receipt["usage"] = event.stop_reason, event.usage or {}
+                elif isinstance(event, Error):
+                    receipt["outcome"], receipt["error"] = "error", event.message[:300]
                 yield event
         finally:
             escalated = self.model_spec != home[1] and not self._failed_over
             if escalated:
                 self._use(*home)
             switched_to = self._apply_pending_switch()
+            self._write_receipt(trace, source, session, user_text, receipt)
         if escalated and not switched_to:
             yield ModelSwitched(home[1])
         if switched_to:
             yield ModelSwitched(switched_to)
+
+    def _traced(self, model: Model, trace: str, source: str) -> Model:
+        traced = getattr(model, "traced", None)
+        return traced(trace, source) if traced else model
+
+    def _write_receipt(self, trace: str, source: str, session: Session, text: str, receipt: dict) -> None:
+        try:
+            store = telemetry.get_store()
+            calls = store.timeline(trace)
+            models = [c for c in calls if c["kind"] == "model"]
+            from .costs import cost
+            rows: dict[tuple, dict] = {}
+            for c in models:
+                provider, _, model = c["name"].partition("/")
+                row = rows.setdefault((provider, model), {"provider": provider, "model": model, "calls": 0,
+                                                          "input_tokens": 0, "output_tokens": 0, "avg_duration_ms": 0})
+                row["calls"] += 1
+                row["input_tokens"] += c["detail"].get("in") or 0
+                row["output_tokens"] += c["detail"].get("out") or 0
+            usd, priced = cost(list(rows.values()), (self.budget._overrides if self.budget else None))
+            unpriced = any(r.get("usd") is None for r in priced)
+            telemetry.record_turn({
+                "trace_id": trace, "started_at": telemetry._iso(receipt["started"]), "source": source,
+                "conversation_id": session.id, "model": self.model_spec, "text": text[:300],
+                "duration_ms": (time.monotonic() - receipt["clock"]) * 1000, "ttft_ms": receipt["ttft"],
+                "steps": len(models), "tools": receipt["tools"],
+                "input_tokens": sum(r["input_tokens"] for r in rows.values()),
+                "output_tokens": sum(r["output_tokens"] for r in rows.values()),
+                "usd": None if (unpriced and not usd) else usd,
+                "outcome": receipt["outcome"] or "interrupted", "error": receipt["error"],
+            })
+        except Exception:  # noqa: BLE001 -- the receipt must never break a turn
+            log.exception("couldn't write the turn receipt")
 
     def _escalate(self) -> str | None:
         target = self.router.escalation() if self.router else None
@@ -189,22 +243,33 @@ class Agent:
         self._use(*target)
         return target[1]
 
-    async def _steps(self, session: Session, user_text: str, confirmer: Confirmer, spoken: bool) -> AsyncIterator[Event]:
+    async def _steps(self, session: Session, user_text: str, confirmer: Confirmer, spoken: bool,
+                     trace: str = "", source: str = "chat") -> AsyncIterator[Event]:
         if self.failover is not None:
             target = self.failover.back_home(self.model_spec)
             if target is not None:
                 self._use(*target)
                 yield ModelSwitched(target[1])
             elif self.failover.resting(self.model_spec) and (target := self.failover.next(self.model_spec)):
+                telemetry.record_event(trace, "failover", f"{self.model_spec} → {target[1]}",
+                                       detail={"reason": "still resting from an earlier limit"})
                 yield self._fail_over(session, target)
         if self.router and self.router.wants_escalation(user_text) and (spec := self._escalate()):
             yield ModelSwitched(spec)
         session.repair()
         session.collapse_tool_history(self.model_spec)
         if self.compactor is not None:
-            model = self.model
+            model = self._traced(self.model, trace, "compaction")
             try:
-                await asyncio.to_thread(self.compactor.maybe_compact, session, model)
+                from .compaction import estimate_tokens
+                before = estimate_tokens(session.live()[1])
+                started, clock = time.time(), time.monotonic()
+                if await asyncio.to_thread(self.compactor.maybe_compact, session, model):
+                    summary, live = session.live()
+                    telemetry.record_event(trace, "compaction", "summarised older turns",
+                                           (time.monotonic() - clock) * 1000, started=started,
+                                           detail={"tokens_before": before,
+                                                   "tokens_after": estimate_tokens(live) + len(summary) // 4})
             except Exception:  # noqa: BLE001 -- compaction must never cost the user their turn
                 log.exception("compaction failed")
         session.append_user(user_text)
@@ -223,7 +288,7 @@ class Agent:
             while True:
                 messages = self.prompts.build(session, spoken)
                 schemas = self.tool_schemas() or None
-                model = self.model
+                model = self._traced(self.model, trace, source)
                 response: ModelResponse | None = None
                 streamed = False
                 try:
@@ -241,6 +306,8 @@ class Agent:
                         self.failover.mark(self.model_spec, str(e))
                         target = self.failover.next(self.model_spec)
                         if target is not None:
+                            telemetry.record_event(trace, "failover", f"{self.model_spec} → {target[1]}",
+                                                   detail={"reason": str(e)[:200]})
                             yield self._fail_over(session, target)
                             continue
                     yield Error(str(e))
@@ -267,7 +334,12 @@ class Agent:
 
             for call in response.tool_calls:
                 yield ToolStarted(call)
-                result = await self.gate.dispatch(call, self.tools, confirmer, session)
+                with telemetry.span(trace, "tool", call.name) as detail:
+                    detail["arguments"] = json.dumps(call.arguments, ensure_ascii=False)[:200]
+                    result = await self.gate.dispatch(call, self.tools, confirmer, session)
+                    detail["status"] = "ok" if result.ok else ("declined" if result.output == DECLINED else "failed")
+                    if not result.ok:
+                        detail["output"] = result.output[:200]
                 session.append_tool_result(call, result)
                 yield ToolFinished(call, result)
 

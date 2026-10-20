@@ -55,6 +55,7 @@ from ..voice.conversation import VoiceConfirmer, speak_turn
 from ..voice.envelope import STEP, wav_envelope
 from ..voice.ptt import PushToTalk, default_mic, hear_once
 from ..voice.web_player import WebSocketPlayer
+from .. import telemetry
 from . import remote
 from .desk import DeskConfirmer, display_text, explain_prompt
 from .hub import Hub, Viewer
@@ -156,7 +157,8 @@ def create_server(app: Escanor, store: SessionStore, speech: Any | None, local_a
                 return response
             if not remote.token_matches(request.cookies.get(remote.COOKIE), token):
                 return HTMLResponse(remote.PAIR_PAGE, status_code=401)
-            if request.url.path.startswith("/api/") and request.url.path not in REMOTE_API:
+            if request.url.path == "/traces" or (request.url.path.startswith("/api/")
+                                                 and request.url.path not in REMOTE_API):
                 return JSONResponse({"error": "only available on the Mac"}, status_code=403)
         if request.method != "GET" and not origin_allowed(headers.get("origin"), remote.request_host(headers),
                                                          remote_ok=not local):
@@ -174,6 +176,20 @@ def create_server(app: Escanor, store: SessionStore, speech: Any | None, local_a
     @web.get("/")
     def index() -> FileResponse:
         return FileResponse(STATIC / "index.html")
+
+    @web.get("/traces")
+    def traces_page() -> FileResponse:
+        return FileResponse(STATIC / "traces.html")
+
+    @web.get("/api/traces")
+    def traces(limit: int = 40) -> JSONResponse:
+        return JSONResponse(telemetry.get_store().recent_turns(max(1, min(limit, 200))))
+
+    @web.get("/api/traces/{trace_id}")
+    def trace(trace_id: str) -> JSONResponse:
+        store = telemetry.get_store()
+        turn = store.turn(trace_id)
+        return JSONResponse({"turn": turn, "timeline": store.timeline(turn["trace_id"]) if turn else []})
 
     @web.get("/manifest.webmanifest")
     def manifest(request: Request) -> JSONResponse:
@@ -228,14 +244,16 @@ def create_server(app: Escanor, store: SessionStore, speech: Any | None, local_a
 
     # ---- one turn, wherever it came from ----
 
-    async def run(session: Session, text: str, speaker: AudioOut | None, confirmer) -> None:
+    async def run(session: Session, text: str, speaker: AudioOut | None, confirmer,
+                  source: str = "hud", trace: str | None = None) -> None:
         async def sink(event) -> None:
             message = _event_message(event)
             if message:
                 await hub.broadcast(session.id, message)
         try:
             await speak_turn(app.agent, session, text, speaker, confirmer, sink,
-                             patience=float(app.settings["voice"].get("defer_after_seconds", 0)) or None)
+                             patience=float(app.settings["voice"].get("defer_after_seconds", 0)) or None,
+                             source=source, trace_id=trace)
         except asyncio.CancelledError:
             await hub.broadcast(session.id, {"type": "done", "stop_reason": "interrupted"})
             raise
@@ -302,12 +320,15 @@ def create_server(app: Escanor, store: SessionStore, speech: Any | None, local_a
             await hub.broadcast_local({"type": "listening", "on": False})
         if wav is None:  # a tap: that just stops Escanor talking
             return {"ok": True, "heard": ""}
-        text = (await asyncio.to_thread(speech.transcribe, wav)).strip()
+        trace = telemetry.new_trace_id()
+        with telemetry.span(trace, "stt", "push-to-talk") as detail:
+            text = (await asyncio.to_thread(speech.transcribe, wav)).strip()
+            detail["chars"] = len(text)
         if not text:
             return {"ok": True, "heard": ""}
         session = hub.session("latest")
         await hub.broadcast(session.id, {"type": "user", "text": text})
-        await hub.start(session.id, run(session, text, local_audio, desk_confirmer(session)))
+        await hub.start(session.id, run(session, text, local_audio, desk_confirmer(session), "hotkey", trace))
         return {"ok": True, "heard": text}
 
     talk.on_timeout = finish_talk
@@ -340,7 +361,7 @@ def create_server(app: Escanor, store: SessionStore, speech: Any | None, local_a
             if not viewers:
                 await hub.wait_for_viewer(session.id, timeout=6.0)
             await hub.broadcast(session.id, {"type": "user", "text": display_text(prompt)})
-            await run(session, prompt, local_audio if aloud else None, desk_confirmer(session))
+            await run(session, prompt, local_audio if aloud else None, desk_confirmer(session), "explain")
 
         await hub.start(session.id, go())
         return JSONResponse({"ok": True, "viewers": viewers})
@@ -396,6 +417,7 @@ def create_server(app: Escanor, store: SessionStore, speech: Any | None, local_a
         else:
             audio = None
 
+        local_page = remote.is_local(ws.headers)
         viewer = Viewer(session.id, send, local_speech=mode == "local")
         viewer.confirmer = WebConfirmer(send, audio)
         speak_typed = params.get("speak_typed") == "1"
@@ -426,13 +448,16 @@ def create_server(app: Escanor, store: SessionStore, speech: Any | None, local_a
                         await send({"type": "model_switched", "model": spec})
                 elif kind in ("text", "audio"):
                     await interrupt()
+                    trace = telemetry.new_trace_id()
                     if kind == "audio":
                         if speech is None:
                             await send({"type": "error", "message": "Voice input isn't enabled on this server."})
                             continue
                         await send({"type": "transcribing"})
                         wav = base64.b64decode(message.get("data", ""))
-                        text = (await asyncio.to_thread(speech.transcribe, wav)).strip()
+                        with telemetry.span(trace, "stt", "page mic") as detail:
+                            text = (await asyncio.to_thread(speech.transcribe, wav)).strip()
+                            detail["chars"] = len(text)
                         if not text:
                             await send({"type": "error", "message": line("not_heard")})
                             continue
@@ -442,7 +467,8 @@ def create_server(app: Escanor, store: SessionStore, speech: Any | None, local_a
                             continue
                     await hub.broadcast(session.id, {"type": "user", "text": text})
                     speaker = audio if (kind == "audio" or speak_typed) else None
-                    await hub.start(session.id, run(session, text, speaker, viewer.confirmer), owner=viewer)
+                    await hub.start(session.id, run(session, text, speaker, viewer.confirmer,
+                                                    "phone" if not local_page else "hud", trace), owner=viewer)
         except WebSocketDisconnect:
             pass
         finally:
