@@ -98,6 +98,9 @@ DEFAULTS: dict[str, Any] = {
         # Voice weight (voice/effects.py): "sun" = heaviest at noon, lighter at night;
         # "heavy" = always deep and chesty; "none" = the plain TTS voice.
         "effect": "sun",
+        # The second voice for the HUD / menubar voice switch ("" = no switch).
+        "alt_voice": "en_US-ryan-high",
+        "alt_effect": "sun",
         # A phrase ("hey escanor": spotted by transcribing speech, any phrase works)
         # or an openWakeWord model name ("hey_jarvis": a dedicated detector).
         "wake_word": "hey escanor",

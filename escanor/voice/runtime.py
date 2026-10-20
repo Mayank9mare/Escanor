@@ -29,12 +29,17 @@ def attach_dj_voice(app: Escanor, audio: AudioOut) -> None:
 
 
 def build_speech(settings: dict) -> SpeechEngine:
+    from .. import state
     voice = settings["voice"]
-    return SpeechEngine(
+    engine = SpeechEngine(
         stt_engine=voice["stt"], tts_engine=voice["tts"],
         whisper_model=voice.get("whisper_model") or None, tts_voice=voice.get("tts_voice") or None,
         tts_speed=float(voice.get("tts_speed", 1.0)), effect=voice.get("effect", "sun"),
+        alt_voice=voice.get("alt_voice") or None, alt_effect=voice.get("alt_effect") or None,
     )
+    if state.get("voice") in engine.voices:   # the last choice from the voice switch
+        engine.use(state.get("voice"))
+    return engine
 
 
 def serve(app: Escanor, store: SessionStore, speech: SpeechEngine | None, mute: bool = False) -> None:

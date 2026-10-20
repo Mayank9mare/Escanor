@@ -224,3 +224,45 @@ def test_menubar_status_and_controls(store):
     assert client.post("/api/model?name=bogus").status_code == 400
     assert client.post("/api/interrupt").json() == {"ok": True}
     assert client.post("/api/quiet?minutes=30").status_code == 409  # proactive off in tests
+
+
+# ---------- voice switch ----------
+
+class TwoVoices(FakeSpeech):
+    def __init__(self):
+        super().__init__()
+        self.voices = {"main": ("en_GB-alan-medium", "heavy"), "alt": ("en_US-ryan-high", "sun")}
+        self.current = "main"
+
+    def use(self, name):
+        if name == "toggle":
+            name = "alt" if self.current == "main" else "main"
+        if name not in self.voices:
+            raise ValueError("No second voice set ([voice] alt_voice).")
+        self.current = name
+        return name
+
+    def label(self, name=None):
+        voice, effect = self.voices[name or self.current]
+        return f"{voice.split('-')[1].title()} · {effect}"
+
+
+def test_voice_switch_toggles_remembers_and_speaks_a_sample(store):
+    from escanor import state
+    speech = TwoVoices()
+    player = NullPlayer()
+    audio = AudioOut(speech.synthesize, player)
+    client, _, _ = _client(store, [], speech, audio)
+    with client:
+        assert client.get("/api/voice").json()["label"] == "Alan · heavy"
+        switched = client.post("/api/voice?choice=toggle").json()
+        assert switched["ok"] and switched["current"] == "alt" and switched["label"] == "Ryan · sun"
+        assert state.get("voice") == "alt"
+        assert client.get("/api/status").json()["voice"]["current"] == "alt"
+        assert client.post("/api/voice?choice=bogus").status_code == 400
+
+
+def test_voice_switch_hidden_on_text_only_server(store):
+    client, _, _ = _client(store, [])
+    assert client.get("/api/voice").json() == {"available": False}
+    assert client.post("/api/voice").status_code == 409

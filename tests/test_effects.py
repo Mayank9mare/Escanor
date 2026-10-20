@@ -42,3 +42,15 @@ def test_speech_engine_speeds_tts_up_to_keep_the_pace():
     engine._tts.set_length_scale = seen.append
     engine.synthesize("hello")
     assert seen == [1.0 * effects.HEAVY.pitch]
+
+
+def test_speech_engine_switches_voices_and_labels_them(monkeypatch):
+    engine = SpeechEngine(stt_engine="mock", tts_engine="mock", tts_voice="en_GB-alan-medium", effect="heavy",
+                          alt_voice="en_US-ryan-high", alt_effect="sun")
+    assert engine.label() == "Alan · heavy" and engine.effect == "heavy"
+    assert engine.use("toggle") == "alt" and engine.label() == "Ryan · sun" and engine.effect == "sun"
+    assert engine.synthesize("hi")[:4] == b"RIFF"
+    assert engine.use("toggle") == "main"
+    import pytest
+    with pytest.raises(ValueError):
+        SpeechEngine(stt_engine="mock", tts_engine="mock").use("alt")

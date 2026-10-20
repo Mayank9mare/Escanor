@@ -99,6 +99,7 @@ def run(settings: dict, start_server: bool = True) -> None:
             self.status_item = rumps.MenuItem("Escanor · starting…")
             self.quiet_item = rumps.MenuItem("Quiet for 1 hour", callback=self.toggle_quiet)
             self.server_item = rumps.MenuItem("Start Escanor", callback=self.toggle_server)
+            self.voice_item = rumps.MenuItem("Switch voice", callback=self.switch_voice)
             self.jobs: queue.Queue = queue.Queue()
             threading.Thread(target=self._work, daemon=True).start()
             self.talking = False
@@ -112,7 +113,7 @@ def run(settings: dict, start_server: bool = True) -> None:
                 self.status_item, None,
                 rumps.MenuItem("Open Escanor", callback=self.open_hud, key="o"),
                 rumps.MenuItem("Stop talking", callback=self.stop_talking),
-                self.quiet_item, models, None,
+                self.quiet_item, self.voice_item, models, None,
                 *self._hotkey_rows(), None,
                 self.server_item,
                 rumps.MenuItem("Quit", callback=self.quit_all, key="q"),
@@ -231,6 +232,11 @@ def run(settings: dict, start_server: bool = True) -> None:
             if not result or not result.get("ok", False):
                 rumps.notification("Escanor", "Couldn't change quiet mode", (result or {}).get("error", ""))
 
+        def switch_voice(self, _sender) -> None:
+            # loading the other voice takes a second or two: off the main thread
+            self.jobs.put(lambda: self._check(client.post("/api/voice?choice=toggle", timeout=20),
+                                              "Couldn't switch voice"))
+
         def _switcher(self, alias: str):
             def switch(_sender) -> None:
                 result = client.post(f"/api/model?name={quote(alias)}")
@@ -258,6 +264,12 @@ def run(settings: dict, start_server: bool = True) -> None:
             if status.get("quiet_until"):
                 line += f" · quiet until {status['quiet_until']}"
             self.status_item.title = line
+            voice = status.get("voice") or {}
+            if voice.get("available"):
+                other = next((label for name, label in voice["voices"].items() if name != voice["current"]), "")
+                self.voice_item.title = f"Voice: {voice['label']}  →  switch to {other}"
+            else:
+                self.voice_item.title = "Switch voice (set [voice] alt_voice)"
             self.quiet_item.title = "Resume announcements" if status.get("quiet_until") else "Quiet for 1 hour"
             self.server_item.title = "Stop Escanor" if self.server is not None else "Escanor runs elsewhere"
 

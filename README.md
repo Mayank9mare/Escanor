@@ -111,6 +111,9 @@ time?"). The wake phrase is spotted by Whisper with a hint for the name, so any 
 (`tts_voice = "en_US-ryan-high"`, `tts_speed = 1.1`); `en_GB-alan-medium` is a British alternative.
 The voice is made **heavy** (deeper, chestier, a touch of hall) and its weight follows the sun: heaviest at
 high noon, lighter at night. `[voice] effect = "heavy"` keeps it heavy all day; `"none"` turns it off.
+Two voices: the **Voice** button in the HUD (or <kbd>V</kbd>, or the menubar) switches between `tts_voice` and
+`alt_voice` (default: Ryan, deep American, weight following the sun), says a line in the new voice, and remembers
+the choice.
 
 Pressing the mic, or sending a message while Escanor is talking, interrupts it. Talking over it in
 `listen` mode needs headphones (`[voice] barge_in = "headphones"`), otherwise it hears itself.

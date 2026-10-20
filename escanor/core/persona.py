@@ -85,6 +85,13 @@ LINES = {
         "afternoon": "Give me a moment; I'll look.",
         "night": "Oh, just a moment, let me check...",
     },
+    "voice_switched": {
+        "dawn": "Very well. I shall speak like this.",
+        "day": "Very well. Hear me now.",
+        "noon": "Behold. The same sun, a new voice.",
+        "afternoon": "There. This is how I sound now.",
+        "night": "Um, is this better? I hope you like it.",
+    },
     "not_heard": {
         "dawn": "I didn't catch that. Once more?",
         "day": "Speak again; I didn't catch that.",

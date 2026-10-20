@@ -240,6 +240,34 @@ function renderSoundButton() { $("sound").setAttribute("aria-pressed", String(so
 $("sound").onclick = () => { soundOn = !soundOn; store.set("escanor.sound", soundOn ? "1" : "0"); renderSoundButton(); };
 renderSoundButton();
 
+// ---------- voice switch: Escanor's two voices ([voice] tts_voice / alt_voice) ----------
+
+function renderVoice(info) {
+  const button = $("voice");
+  button.hidden = !info.available;
+  if (!info.available) return;
+  button.textContent = `Voice · ${info.label.split(" · ")[0]}`;
+  button.setAttribute("aria-pressed", String(info.current === "alt"));
+  const other = Object.entries(info.voices).find(([name]) => name !== info.current);
+  button.title = other ? `Switch to ${other[1]} (V)` : "Switch voice (V)";
+}
+
+async function loadVoice() {
+  try { renderVoice(await (await fetch("/api/voice")).json()); } catch (_) {}
+}
+
+async function switchVoice() {
+  const button = $("voice");
+  if (button.hidden || button.disabled) return;
+  button.disabled = true;
+  try {
+    const info = await (await fetch("/api/voice?choice=toggle", { method: "POST" })).json();
+    if (info.ok) { renderVoice(info); op(`VOICE → ${info.label.toUpperCase()}`); }
+    else op(`VOICE: ${info.error}`, true);
+  } finally { button.disabled = false; }
+}
+$("voice").onclick = switchVoice;
+
 // ---------- keyboard ----------
 
 document.addEventListener("keydown", (e) => {
@@ -249,6 +277,7 @@ document.addEventListener("keydown", (e) => {
   if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.code === "Space" && !e.repeat) { e.preventDefault(); startRecording(); }
   else if (e.key.toLowerCase() === "t") toggleTranscript();
+  else if (e.key.toLowerCase() === "v") switchVoice();
 });
 document.addEventListener("keyup", (e) => {
   if (e.code === "Space" && document.activeElement !== input) { e.preventDefault(); stopRecording(); }
@@ -695,4 +724,5 @@ requestAnimationFrame(draw);
 tickClock();
 setInterval(tickClock, 1000);
 loadModels();
+loadVoice();
 connect();

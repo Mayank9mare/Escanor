@@ -65,7 +65,7 @@ STATIC = Path(__file__).parent / "static"
 
 # What a paired phone may use besides the page and the WebSocket. The Mac's
 # own controls (mic, hotkeys, menubar) stay local-only.
-REMOTE_API = {"/api/models", "/api/persona"}
+REMOTE_API = {"/api/models", "/api/persona", "/api/voice"}
 
 
 def _history(session: Session) -> list[dict]:
@@ -192,6 +192,33 @@ def create_server(app: Escanor, store: SessionStore, speech: Any | None, local_a
     def persona() -> JSONResponse:
         return JSONResponse({"style": app.settings["persona"]["style"]})
 
+    # ---- the voice switch (HUD button, menubar) ----
+
+    def voice_info() -> dict:
+        if speech is None or not hasattr(speech, "voices"):
+            return {"available": False}
+        return {"available": len(speech.voices) > 1, "current": speech.current,
+                "label": speech.label(), "voices": {name: speech.label(name) for name in speech.voices}}
+
+    @web.get("/api/voice")
+    def get_voice() -> JSONResponse:
+        return JSONResponse(voice_info())
+
+    @web.post("/api/voice")
+    async def set_voice(choice: str = "toggle") -> JSONResponse:
+        if speech is None or not hasattr(speech, "use"):
+            return JSONResponse({"ok": False, "error": "voice is off on this server"}, status_code=409)
+        try:
+            name = await asyncio.to_thread(speech.use, choice)   # may load a voice model (a second or two)
+        except ValueError as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+        from .. import state
+        state.set("voice", name)
+        if local_audio is not None:
+            local_audio.interrupt()
+            local_audio.say(line("voice_switched"))   # a taste of the new voice
+        return JSONResponse({"ok": True, **voice_info()})
+
     @web.get("/api/models")
     def models() -> JSONResponse:
         return JSONResponse({"current": app.agent.model_spec, "aliases": app.settings["models"]["aliases"]})
@@ -237,6 +264,7 @@ def create_server(app: Escanor, store: SessionStore, speech: Any | None, local_a
             "state": state, "model": app.agent.model_spec,
             "quiet_until": paused.strftime("%H:%M") if paused and paused > datetime.now() else None,
             "dj": dj.status() if dj is not None else None,
+            "voice": voice_info(),
         })
 
     @web.post("/api/interrupt")
