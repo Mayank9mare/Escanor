@@ -36,6 +36,7 @@ class SpeechEngine:
         effect: str = "none",
         alt_voice: str | None = None,
         alt_effect: str | None = None,
+        more_voices: dict[str, dict] | None = None,
     ):
         self._stt = get_stt_engine(stt_engine, model_name=whisper_model)
         self._tts_engine = tts_engine
@@ -45,6 +46,9 @@ class SpeechEngine:
         self.voices = {"main": (tts_voice, effect)}
         if alt_voice:
             self.voices["alt"] = (alt_voice, alt_effect or effect)
+        for name, spec in (more_voices or {}).items():   # [voice.more.<name>]: voice + effect
+            if spec.get("voice"):
+                self.voices[name] = (spec["voice"], spec.get("effect", "none"))
         self._engines = {tts_voice: get_tts_engine(tts_engine, voice=tts_voice, speed=tts_speed)}
         self._lock = threading.Lock()
         self.current = "main"
@@ -70,11 +74,13 @@ class SpeechEngine:
         self._engines[self.voices[self.current][0]] = engine
 
     def use(self, name: str) -> str:
-        """Switch voice: 'main', 'alt' or 'toggle'. Returns the voice now in use."""
+        """Switch voice: a name ('main', 'alt', 'cute'...) or 'toggle' for the
+        next one in order. Returns the voice now in use."""
+        names = list(self.voices)
         if name == "toggle":
-            name = "alt" if self.current == "main" else "main"
-        if name not in self.voices:
-            raise ValueError("No second voice set ([voice] alt_voice).")
+            name = names[(names.index(self.current) + 1) % len(names)]
+        if name not in self.voices or len(names) < 2:
+            raise ValueError("No other voice set ([voice] alt_voice or [voice.more]).")
         with self._lock:
             self.current = name
             self._tts  # load it now, not mid-sentence

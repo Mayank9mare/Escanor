@@ -54,3 +54,15 @@ def test_speech_engine_switches_voices_and_labels_them(monkeypatch):
     import pytest
     with pytest.raises(ValueError):
         SpeechEngine(stt_engine="mock", tts_engine="mock").use("alt")
+
+
+def test_switch_cycles_through_three_voices_and_cute_pitches_up():
+    engine = SpeechEngine(stt_engine="mock", tts_engine="mock", tts_voice="en_GB-alan-medium", effect="heavy",
+                          alt_voice="en_US-ryan-high", alt_effect="sun",
+                          more_voices={"cute": {"voice": "en_US-amy-medium", "effect": "cute"}})
+    assert [engine.use("toggle") for _ in range(3)] == ["alt", "cute", "main"]
+    engine.use("cute")
+    assert engine.label() == "Amy · cute"
+    assert effects.voice_for("cute").pitch > 1
+    out = effects.apply(tone(200), effects.CUTE)
+    assert abs(dominant(out) - 224) < 8

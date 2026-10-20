@@ -247,9 +247,8 @@ function renderVoice(info) {
   button.hidden = !info.available;
   if (!info.available) return;
   button.textContent = `Voice · ${info.label.split(" · ")[0]}`;
-  button.setAttribute("aria-pressed", String(info.current === "alt"));
-  const other = Object.entries(info.voices).find(([name]) => name !== info.current);
-  button.title = other ? `Switch to ${other[1]} (V)` : "Switch voice (V)";
+  button.setAttribute("aria-pressed", String(info.current !== "main"));
+  button.title = `Switch to ${info.next_label} (V)`;
 }
 
 async function loadVoice() {

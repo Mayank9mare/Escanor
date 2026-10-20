@@ -238,7 +238,7 @@ class TwoVoices(FakeSpeech):
         if name == "toggle":
             name = "alt" if self.current == "main" else "main"
         if name not in self.voices:
-            raise ValueError("No second voice set ([voice] alt_voice).")
+            raise ValueError("No other voice set ([voice] alt_voice or [voice.more]).")
         self.current = name
         return name
 

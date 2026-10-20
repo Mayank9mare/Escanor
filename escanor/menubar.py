@@ -266,10 +266,9 @@ def run(settings: dict, start_server: bool = True) -> None:
             self.status_item.title = line
             voice = status.get("voice") or {}
             if voice.get("available"):
-                other = next((label for name, label in voice["voices"].items() if name != voice["current"]), "")
-                self.voice_item.title = f"Voice: {voice['label']}  →  switch to {other}"
+                self.voice_item.title = f"Voice: {voice['label']}  →  switch to {voice['next_label']}"
             else:
-                self.voice_item.title = "Switch voice (set [voice] alt_voice)"
+                self.voice_item.title = "Switch voice (set [voice] alt_voice or [voice.more])"
             self.quiet_item.title = "Resume announcements" if status.get("quiet_until") else "Quiet for 1 hour"
             self.server_item.title = "Stop Escanor" if self.server is not None else "Escanor runs elsewhere"
 

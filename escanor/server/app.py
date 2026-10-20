@@ -197,8 +197,11 @@ def create_server(app: Escanor, store: SessionStore, speech: Any | None, local_a
     def voice_info() -> dict:
         if speech is None or not hasattr(speech, "voices"):
             return {"available": False}
-        return {"available": len(speech.voices) > 1, "current": speech.current,
-                "label": speech.label(), "voices": {name: speech.label(name) for name in speech.voices}}
+        names = list(speech.voices)
+        following = names[(names.index(speech.current) + 1) % len(names)]
+        return {"available": len(names) > 1, "current": speech.current, "label": speech.label(),
+                "next": following, "next_label": speech.label(following),
+                "voices": {name: speech.label(name) for name in names}}
 
     @web.get("/api/voice")
     def get_voice() -> JSONResponse:

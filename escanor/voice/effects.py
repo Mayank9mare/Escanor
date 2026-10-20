@@ -12,6 +12,9 @@ a few milliseconds per sentence.
   drive   soft saturation: grit and density in the chest
   room    reverb amount (0 = dry); a short, dark hall
 
+effect = "cute" goes the other way: pitched up a little, for a sweet,
+young voice.
+
 With [voice] effect = "sun" the weight follows the sun like the persona:
 heaviest at high noon, lightest (the timid innkeeper) at night.
 """
@@ -42,11 +45,14 @@ SUN = {
 }
 
 
+CUTE = Voice(pitch=1.12, room=0.04)   # higher and brighter: younger, sweeter
+
+
 def voice_for(effect: str, now: datetime | None = None) -> Voice:
     if effect == "sun":
         from ..core.persona import phase
         return SUN[phase(now or datetime.now())]
-    return HEAVY if effect == "heavy" else NONE
+    return {"heavy": HEAVY, "cute": CUTE}.get(effect, NONE)
 
 
 def _read(wav: bytes) -> tuple[np.ndarray, int]:

@@ -36,6 +36,7 @@ def build_speech(settings: dict) -> SpeechEngine:
         whisper_model=voice.get("whisper_model") or None, tts_voice=voice.get("tts_voice") or None,
         tts_speed=float(voice.get("tts_speed", 1.0)), effect=voice.get("effect", "sun"),
         alt_voice=voice.get("alt_voice") or None, alt_effect=voice.get("alt_effect") or None,
+        more_voices=voice.get("more") or {},
     )
     if state.get("voice") in engine.voices:   # the last choice from the voice switch
         engine.use(state.get("voice"))
