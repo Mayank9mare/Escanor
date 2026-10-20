@@ -102,7 +102,7 @@ DEFAULTS: dict[str, Any] = {
         "alt_voice": "en_US-ryan-high",
         "alt_effect": "sun",
         # More voices for the switch, in order: [voice.more.<name>] voice / effect.
-        "more": {"cute": {"voice": "en_US-amy-medium", "effect": "cute"}},
+        "more": {"cute": {"voice": "en_US-kristin-medium", "effect": "cute"}},
         # A phrase ("hey escanor": spotted by transcribing speech, any phrase works)
         # or an openWakeWord model name ("hey_jarvis": a dedicated detector).
         "wake_word": "hey escanor",

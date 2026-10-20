@@ -113,7 +113,7 @@ The voice is made **heavy** (deeper, chestier, a touch of hall) and its weight f
 high noon, lighter at night. `[voice] effect = "heavy"` keeps it heavy all day; `"none"` turns it off.
 Two voices: the **Voice** button in the HUD (or <kbd>V</kbd>, or the menubar) switches between `tts_voice` and
 `alt_voice` (default: Ryan, deep American, weight following the sun) and any `[voice.more.<name>]` voices, in
-order: by default a cute, bright female voice (Amy, pitched up, `effect = "cute"`). It says a line in the new voice
+order: by default a cute, soft female voice (Kristin, pitched up, `effect = "cute"`). It says a line in the new voice
 and remembers the choice.
 
 Pressing the mic, or sending a message while Escanor is talking, interrupts it. Talking over it in
